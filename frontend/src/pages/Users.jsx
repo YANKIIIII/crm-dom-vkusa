@@ -1,6 +1,7 @@
 import { Box, Typography, Paper, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, CircularProgress } from '@mui/material';
 import { useEffect, useState } from 'react';
 import api from '../api';
+import { extractApiError } from '../utils';
 
 const Users = () => {
   const [users, setUsers] = useState([]);
@@ -41,6 +42,7 @@ const Users = () => {
       fetchUsers(); // refresh the list
     } catch (error) {
       console.error("Failed to create user", error);
+      alert(`Не удалось создать пользователя:\n${extractApiError(error)}`);
     } finally {
       setLoading(false);
     }

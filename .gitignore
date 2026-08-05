@@ -11,6 +11,8 @@ env/
 # Environment variables (holds SECRET_KEY — never commit)
 .env
 .env.*
+!.env.example
+!backend/.env.example
 
 # Django
 db.sqlite3

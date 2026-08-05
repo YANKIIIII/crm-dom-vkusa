@@ -6,6 +6,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
+import { extractApiError } from '../utils';
 
 const ClientDetail = () => {
   const { id } = useParams();
@@ -64,6 +65,7 @@ const ClientDetail = () => {
       }
     } catch (err) {
       console.error("Failed to save client", err);
+      alert(`Ошибка при сохранении клиента:\n${extractApiError(err)}`);
     } finally {
       setSaving(false);
     }

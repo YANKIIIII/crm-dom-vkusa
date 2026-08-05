@@ -21,12 +21,26 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle token refresh (MVP approach: redirect to login if 401)
+// Endpoints where a 401 must not trigger a refresh attempt
+// (login failure or an invalid/expired refresh token itself).
+const AUTH_URLS = ['/token/', '/token/refresh/'];
+
+const logout = () => {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user_role');
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+};
+
+// Response interceptor to handle token refresh (single attempt, then logout)
 api.interceptors.response.use(
   response => response,
   async error => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const isAuthUrl = AUTH_URLS.some(url => originalRequest?.url?.endsWith(url));
+    if (error.response?.status === 401 && !isAuthUrl && !originalRequest._retry) {
       originalRequest._retry = true;
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
@@ -36,15 +50,10 @@ api.interceptors.response.use(
           originalRequest.headers['Authorization'] = `Bearer ${res.data.access}`;
           return api(originalRequest);
         } catch (e) {
-          // Refresh failed — logout
+          // Refresh failed — fall through to logout
         }
       }
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('user_role');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
+      logout();
     }
     return Promise.reject(error);
   }

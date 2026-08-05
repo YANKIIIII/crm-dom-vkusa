@@ -2,6 +2,7 @@ import { Box, Paper, Grid, Typography, Button, TextField, Table, TableBody, Tabl
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
+import { extractApiError } from '../utils';
 import ProductSearchModal from '../components/ProductSearchModal';
 
 const ORDER_STATUSES = [
@@ -79,7 +80,7 @@ const OrderDetail = () => {
       }
     } catch (err) {
       console.error(err);
-      alert('Ошибка при сохранении');
+      alert(`Ошибка при сохранении:\n${extractApiError(err)}`);
     }
   };
 
@@ -106,7 +107,8 @@ const OrderDetail = () => {
       fetchOrderData(); // refresh order to show new items
     } catch (err) {
       console.error('Failed to add products', err);
-      alert('Ошибка при добавлении товаров');
+      alert(`Ошибка при добавлении товаров:\n${extractApiError(err)}`);
+      fetchOrderData(); // some items may have been added before the failure
     }
   };
 

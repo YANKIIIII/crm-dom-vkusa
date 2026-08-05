@@ -1,6 +1,7 @@
 import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Select, MenuItem, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, FormControl, InputLabel } from '@mui/material';
 import { useEffect, useState } from 'react';
 import api from '../api';
+import { extractApiError, PAGE_SIZE } from '../utils';
 
 const Warehouse = () => {
   const [stockItems, setStockItems] = useState([]);
@@ -28,6 +29,7 @@ const Warehouse = () => {
       fetchStock();
     } catch (error) {
       console.error("Failed to add stock", error);
+      alert(`Не удалось добавить приход:\n${extractApiError(error)}`);
     } finally {
       setLoading(false);
     }
@@ -114,9 +116,9 @@ const Warehouse = () => {
           count={stockItems.length}
           page={0}
           onPageChange={() => {}}
-          rowsPerPage={10}
+          rowsPerPage={PAGE_SIZE}
           onRowsPerPageChange={() => {}}
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={[PAGE_SIZE]}
         />
       </Paper>
 

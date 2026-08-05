@@ -2,6 +2,7 @@ import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell,
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import { extractApiError, PAGE_SIZE } from '../utils';
 
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -37,6 +38,7 @@ const Clients = () => {
       fetchClients();
     } catch (error) {
       console.error("Failed to create client", error);
+      alert(`Не удалось создать клиента:\n${extractApiError(error)}`);
     } finally {
       setLoading(false);
     }
@@ -123,9 +125,9 @@ const Clients = () => {
           count={totalCount}
           page={page}
           onPageChange={(e, p) => setPage(p)}
-          rowsPerPage={10}
+          rowsPerPage={PAGE_SIZE}
           onRowsPerPageChange={() => {}}
-          rowsPerPageOptions={[10]}
+          rowsPerPageOptions={[PAGE_SIZE]}
         />
       </Paper>
     </Box>

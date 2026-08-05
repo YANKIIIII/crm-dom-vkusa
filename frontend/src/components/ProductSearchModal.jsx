@@ -6,7 +6,7 @@ import {
   Checkbox, Typography, Pagination, Tooltip, Paper
 } from '@mui/material';
 import api from '../api';
-import { formatCurrency } from '../utils';
+import { formatCurrency, PAGE_SIZE } from '../utils';
 
 const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
   const [search, setSearch] = useState('');
@@ -17,6 +17,7 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -32,10 +33,12 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
       const res = await api.get(`/catalog/product_cards/?${params.toString()}`);
       if (res.data.results) {
         setProducts(res.data.results);
-        setTotalPages(Math.ceil(res.data.count / 10)); // Assuming default page size 10
+        setTotalPages(Math.max(1, Math.ceil(res.data.count / PAGE_SIZE)));
+        setTotalCount(res.data.count);
       } else {
         setProducts(res.data);
         setTotalPages(1);
+        setTotalCount(res.data.length);
       }
     } catch (err) {
       console.error("Failed to search products", err);
@@ -215,9 +218,9 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mt: 1 }}>
            {/* Pagination placeholder as in mockup */}
-           <Typography variant="caption" sx={{ mr: 2, color: '#718096' }}>Rows per page: 10</Typography>
+           <Typography variant="caption" sx={{ mr: 2, color: '#718096' }}>Rows per page: {PAGE_SIZE}</Typography>
            <Typography variant="caption" sx={{ mr: 2, color: '#718096' }}>
-             {((page - 1) * 10) + 1}-{Math.min(page * 10, totalPages * 10)} of {totalPages * 10}
+             {totalCount === 0 ? 0 : ((page - 1) * PAGE_SIZE) + 1}-{Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
            </Typography>
            <Pagination 
              count={totalPages} 

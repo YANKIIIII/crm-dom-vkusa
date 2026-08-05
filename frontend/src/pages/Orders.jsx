@@ -2,6 +2,7 @@ import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell,
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import { PAGE_SIZE } from '../utils';
 
 const Orders = () => {
   const [orders, setOrders] = useState([]);
@@ -109,9 +110,9 @@ const Orders = () => {
           count={totalCount}
           page={page}
           onPageChange={(e, p) => setPage(p)}
-          rowsPerPage={10}
+          rowsPerPage={PAGE_SIZE}
           onRowsPerPageChange={() => {}}
-          rowsPerPageOptions={[10]}
+          rowsPerPageOptions={[PAGE_SIZE]}
         />
       </Paper>
     </Box>

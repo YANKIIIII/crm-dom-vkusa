@@ -1,58 +1,53 @@
-# Local development stack (runserver + Vite HMR).
-# For production-like run: docker compose -f docker-compose.prod.yml up --build
+# Production-like stack: gunicorn + nginx (built SPA).
+# Usage:
+#   cp backend/.env.example backend/.env   # fill real secrets, set DEBUG=False
+#   docker compose -f docker-compose.prod.yml up --build -d
 
 services:
   db:
     image: postgres:17
     env_file:
       - ./backend/.env
-    ports:
-      # 5433 on host: 5432 conflicts with Docker/WSL NAT reservation
-      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_prod:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    # No host port — DB stays on the internal network.
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: python manage.py runserver 0.0.0.0:8000
-    volumes:
-      - ./backend:/app
-    ports:
-      - "8000:8000"
     env_file:
       - ./backend/.env
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       USE_SQLITE: "False"
+      DEBUG: "False"
+      # Behind nginx on the same compose network; TLS terminates at the edge.
+      SECURE_SSL_REDIRECT: "False"
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
+    # No host port — traffic enters via frontend/nginx.
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    command: npm run dev -- --host 0.0.0.0
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: /api/v1
     ports:
-      - "5173:5173"
-    environment:
-      CHOKIDAR_USEPOLLING: "true"
+      - "80:80"
     depends_on:
       - backend
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  postgres_data_prod:

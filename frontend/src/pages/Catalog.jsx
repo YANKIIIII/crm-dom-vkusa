@@ -1,6 +1,7 @@
 import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Select, MenuItem, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, FormControl, InputLabel } from '@mui/material';
 import { useEffect, useState } from 'react';
 import api from '../api';
+import { extractApiError, PAGE_SIZE } from '../utils';
 
 const Catalog = () => {
   const [products, setProducts] = useState([]);
@@ -36,6 +37,7 @@ const Catalog = () => {
       fetchProducts();
     } catch (error) {
       console.error("Failed to add product", error);
+      alert(`Не удалось создать товар:\n${extractApiError(error)}`);
     } finally {
       setLoading(false);
     }
@@ -114,9 +116,9 @@ const Catalog = () => {
           count={products.length}
           page={0}
           onPageChange={() => {}}
-          rowsPerPage={10}
+          rowsPerPage={PAGE_SIZE}
           onRowsPerPageChange={() => {}}
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={[PAGE_SIZE]}
         />
       </Paper>
 
