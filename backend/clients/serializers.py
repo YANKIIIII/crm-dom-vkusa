@@ -1,0 +1,25 @@
+from rest_framework import serializers
+from .models import Client, ClientPhone
+
+class ClientSerializer(serializers.ModelSerializer):
+    primary_phone = serializers.SerializerMethodField(read_only=True)
+    grill_type_display = serializers.CharField(source='get_grill_type_display', read_only=True)
+    
+    class Meta:
+        model = Client
+        fields = '__all__'
+
+    def get_primary_phone(self, obj):
+        phones = obj.phones.all()
+        if not phones:
+            return None
+        for phone in phones:
+            if phone.is_primary:
+                return phone.number
+        return phones[0].number
+
+class ClientPhoneSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClientPhone
+        fields = '__all__'
+

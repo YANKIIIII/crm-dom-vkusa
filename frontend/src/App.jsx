@@ -1,0 +1,51 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Typography } from '@mui/material';
+import Layout from './components/Layout/Layout';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Orders from './pages/Orders';
+import OrderDetail from './pages/OrderDetail';
+import Clients from './pages/Clients';
+import ClientDetail from './pages/ClientDetail';
+import Warehouse from './pages/Warehouse';
+import Catalog from './pages/Catalog';
+import Users from './pages/Users';
+import AuditLog from './pages/AuditLog';
+
+// Protected Route wrapper
+const ProtectedRoute = ({ children }) => {
+  const isAuthenticated = !!localStorage.getItem('access_token');
+  return isAuthenticated ? children : <Navigate to="/login" />;
+};
+
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route 
+          path="/" 
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          } 
+        >
+          {/* Outlet routes rendered inside Layout */}
+          <Route index element={<Dashboard />} />
+          <Route path="orders" element={<Orders />} />
+          <Route path="orders/:id" element={<OrderDetail />} />
+          <Route path="clients" element={<Clients />} />
+          <Route path="clients/:id" element={<ClientDetail />} />
+          <Route path="warehouse" element={<Warehouse />} />
+          <Route path="catalog" element={<Catalog />} />
+          <Route path="users" element={<Users />} />
+          <Route path="audit" element={<AuditLog />} />
+        </Route>
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
