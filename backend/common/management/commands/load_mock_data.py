@@ -5,6 +5,7 @@ from catalog.models import ProductCategory, Supplier, ProductCard
 from warehouse.models import StockItem
 from clients.models import Client, ClientPhone
 from orders.models import SalesChannel, PaymentType, DeliveryService, Order, OrderItem, OrderPayment
+from common.models import AuditLog
 from decimal import Decimal
 
 class Command(BaseCommand):
@@ -16,6 +17,8 @@ class Command(BaseCommand):
             return
 
         self.stdout.write("Clearing old data...")
+        # AuditLog.user is RESTRICT — clear logs before deleting users.
+        AuditLog.objects.all().delete()
         OrderPayment.objects.all().delete()
         OrderItem.objects.all().delete()
         Order.objects.all().delete()
