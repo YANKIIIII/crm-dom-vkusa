@@ -52,6 +52,7 @@ const Clients = () => {
   };
 
   const handlePageChange = (e, newPage) => {
+    setSearchInput(urlSearch);
     updateUrl(urlSearch, newPage);
   };
 
