@@ -8,8 +8,9 @@ from django.utils.timezone import now
 @receiver(pre_save, sender=Order)
 def track_status_change(sender, instance, **kwargs):
     if instance.pk:
-        old_instance = Order.objects.get(pk=instance.pk)
-        instance._old_status = old_instance.status
+        old_instance = Order.objects.select_for_update().filter(pk=instance.pk).first()
+        if old_instance:
+            instance._old_status = old_instance.status
     else:
         instance._old_status = None
 

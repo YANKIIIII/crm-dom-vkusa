@@ -36,7 +36,10 @@ class OrderViewSet(viewsets.ModelViewSet):
         else:
             serializer.save(created_by=user)
 
+    @transaction.atomic
     def perform_update(self, serializer):
+        # Lock row so concurrent status transitions serialize and signal side-effects don't double-fire.
+        Order.objects.select_for_update().filter(pk=serializer.instance.pk).first()
         user = self.request.user
         if hasattr(user, 'role') and user.role == 'seller':
             # Нельзя менять продавца и создателя
