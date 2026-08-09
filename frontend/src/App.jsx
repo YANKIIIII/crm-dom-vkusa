@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Typography } from '@mui/material';
 import Layout from './components/Layout/Layout';
+import RoleRoute from './components/RoleRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
@@ -33,15 +33,15 @@ function App() {
           } 
         >
           {/* Outlet routes rendered inside Layout */}
-          <Route index element={<Dashboard />} />
+          <Route index element={<RoleRoute roles={['manager']}><Dashboard /></RoleRoute>} />
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetail />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/:id" element={<ClientDetail />} />
           <Route path="warehouse" element={<Warehouse />} />
           <Route path="catalog" element={<Catalog />} />
-          <Route path="users" element={<Users />} />
-          <Route path="audit" element={<AuditLog />} />
+          <Route path="users" element={<RoleRoute roles={['manager']}><Users /></RoleRoute>} />
+          <Route path="audit" element={<RoleRoute roles={['manager']}><AuditLog /></RoleRoute>} />
         </Route>
       </Routes>
     </Router>

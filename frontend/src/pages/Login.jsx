@@ -20,20 +20,23 @@ const Login = () => {
       localStorage.setItem('refresh_token', refresh);
       
       // Fetch user role
+      let role = 'seller';
       try {
         const meResponse = await api.get('/users/users/me/');
         const data = meResponse.data;
-        let role = data.role;
+        role = data.role;
         if (!role && (data.is_superuser || data.is_staff)) {
           role = 'manager';
         }
-        localStorage.setItem('user_role', role || 'seller');
+        role = role || 'seller';
+        localStorage.setItem('user_role', role);
       } catch (e) {
         console.error("Failed to fetch user role", e);
-        localStorage.setItem('user_role', 'user');
+        role = 'user';
+        localStorage.setItem('user_role', role);
       }
-      
-      navigate('/');
+
+      navigate(role === 'manager' ? '/' : '/orders');
     } catch (err) {
       setError('Неверное имя пользователя или пароль');
     } finally {

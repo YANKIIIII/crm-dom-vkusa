@@ -59,4 +59,5 @@ api.interceptors.response.use(
   }
 );
 
+export { logout };
 export default api;
