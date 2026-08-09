@@ -4,7 +4,7 @@ import {
   DialogTitle, DialogContent, DialogActions, CircularProgress, List, ListItemButton,
   ListItemText, InputAdornment, FormControl, InputLabel,
 } from '@mui/material';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { extractApiError, formatCurrency } from '../utils';
@@ -131,6 +131,24 @@ const OrderDetail = () => {
   const isTerminal = order?.status === 'completed' || order?.status === 'cancelled';
   const isNew = id === 'new';
   const canDeleteOrder = userRole === 'manager' && !isNew && !isTerminal;
+
+  const isDirty = useMemo(() => {
+    if (!order || !baseline) return false;
+    if (isNew) {
+      return Boolean(order.order_date || order.sales_channel || order.client || order.comment);
+    }
+    return Object.keys(diffWritable(order, baseline)).length > 0;
+  }, [order, baseline, isNew]);
+
+  useEffect(() => {
+    if (!isDirty) return undefined;
+    const onBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isDirty]);
 
   const refreshOrder = useCallback(async () => {
     if (isNew) return;
