@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { extractApiError, formatCurrency } from '../utils';
-import { useFeedback } from '../components/FeedbackProvider';
+import { useFeedback } from '../hooks/useFeedback';
 
 const GRILL_TYPES = [
   { value: 'charcoal', label: 'Угольный' },

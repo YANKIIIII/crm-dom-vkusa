@@ -1,7 +1,7 @@
 import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Autocomplete, Alert } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import api from '../api';
-import { useFeedback } from '../components/FeedbackProvider';
+import { useFeedback } from '../hooks/useFeedback';
 import { extractApiError, PAGE_SIZE } from '../utils';
 
 const getTagChipSx = (tag) => {
@@ -18,6 +18,7 @@ const Warehouse = () => {
   const { notify } = useFeedback();
   const isManager = localStorage.getItem('user_role') === 'manager';
   const [stockItems, setStockItems] = useState([]);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -30,24 +31,15 @@ const Warehouse = () => {
   const [productSearchLoading, setProductSearchLoading] = useState(false);
   const [qtyDrafts, setQtyDrafts] = useState({});
   const [savingQtyIds, setSavingQtyIds] = useState(() => new Set());
+  const [listVersion, setListVersion] = useState(0);
   const searchTimerRef = useRef(null);
   const productSearchSeqRef = useRef(0);
 
-  const fetchStock = async () => {
-    try {
-      const response = await api.get(`/warehouse/stock_items/?page=${page + 1}&search=${search}`);
-      setStockItems(response.data.results || response.data);
-      setTotalCount(response.data.count || 0);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const loadProductOptions = async (search = '') => {
+  const loadProductOptions = async (query = '') => {
     const requestId = ++productSearchSeqRef.current;
     setProductSearchLoading(true);
     try {
-      const params = search ? { search } : {};
+      const params = query ? { search: query } : {};
       const res = await api.get('/catalog/product_cards/', { params });
       if (requestId !== productSearchSeqRef.current) return;
       setProductOptions(res.data.results || res.data);
@@ -62,24 +54,56 @@ const Warehouse = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    const fetchStock = async () => {
+      try {
+        const response = await api.get(
+          `/warehouse/stock_items/?page=${page + 1}&search=${encodeURIComponent(search)}`
+        );
+        if (cancelled) return;
+        setStockItems(response.data.results || response.data);
+        setTotalCount(response.data.count || 0);
+      } catch (err) {
+        if (!cancelled) console.error(err);
+      }
+    };
     fetchStock();
-  }, [page]);
+    return () => {
+      cancelled = true;
+    };
+  }, [page, search, listVersion]);
 
   const handleSearch = () => {
-    if (page !== 0) {
-      setPage(0);
-    } else {
-      fetchStock();
-    }
+    setPage(0);
+    setSearch(searchInput);
+    setListVersion((v) => v + 1);
   };
 
   useEffect(() => {
-    if (openModal) {
-      setSelectedProduct(null);
-      setStockQuantity(0);
-      setFormError(null);
-      loadProductOptions();
-    }
+    if (!openModal) return;
+    setSelectedProduct(null);
+    setStockQuantity(0);
+    setFormError(null);
+    let cancelled = false;
+    const requestId = ++productSearchSeqRef.current;
+    setProductSearchLoading(true);
+    api.get('/catalog/product_cards/')
+      .then((res) => {
+        if (cancelled || requestId !== productSearchSeqRef.current) return;
+        setProductOptions(res.data.results || res.data);
+      })
+      .catch((err) => {
+        if (cancelled || requestId !== productSearchSeqRef.current) return;
+        console.error('Failed to load products', err);
+      })
+      .finally(() => {
+        if (!cancelled && requestId === productSearchSeqRef.current) {
+          setProductSearchLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [openModal]);
 
   useEffect(() => () => {
@@ -107,7 +131,7 @@ const Warehouse = () => {
         stock_quantity: Number(stockQuantity) || 0,
       });
       setOpenModal(false);
-      fetchStock();
+      setListVersion((v) => v + 1);
     } catch (error) {
       console.error("Failed to add stock", error);
       setFormError(`Не удалось добавить приход: ${extractApiError(error)}`);
@@ -141,7 +165,7 @@ const Warehouse = () => {
     try {
       await api.patch(`/warehouse/stock_items/${item.id}/`, { stock_quantity: next });
       clearQtyDraftIfUnchanged(item.id, draft);
-      fetchStock();
+      setListVersion((v) => v + 1);
     } catch (error) {
       console.error('Failed to update quantity', error);
       notify(`Не удалось обновить остаток:\n${extractApiError(error)}`, 'error');
@@ -164,8 +188,8 @@ const Warehouse = () => {
             placeholder="Поиск…"
             size="small"
             sx={{ width: 350 }}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSearch();
             }}
@@ -195,7 +219,7 @@ const Warehouse = () => {
             </TableHead>
             <TableBody>
               {stockItems.map((item) => (
-                <TableRow key={item.id} hover sx={{ cursor: 'pointer' }}>
+                <TableRow key={item.id} hover>
                   <TableCell sx={{ color: '#4A5568', fontWeight: 500 }}>{item.product_sku || '—'}</TableCell>
                   <TableCell sx={{ color: '#1A202C' }}>{item.product_name || `Товар #${item.product_card}`}</TableCell>
                   <TableCell align="right" sx={{ 

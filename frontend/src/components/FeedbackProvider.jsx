@@ -1,9 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, Snackbar,
 } from '@mui/material';
-
-const FeedbackContext = createContext(null);
+import { FeedbackContext } from './feedbackContext';
 
 export function FeedbackProvider({ children }) {
   const [toast, setToast] = useState({ open: false, message: '', severity: 'info' });
@@ -78,10 +77,4 @@ export function FeedbackProvider({ children }) {
       </Dialog>
     </FeedbackContext.Provider>
   );
-}
-
-export function useFeedback() {
-  const ctx = useContext(FeedbackContext);
-  if (!ctx) throw new Error('useFeedback must be used within FeedbackProvider');
-  return ctx;
 }

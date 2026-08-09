@@ -9,7 +9,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { extractApiError, formatCurrency } from '../utils';
 import ProductSearchModal from '../components/ProductSearchModal';
-import { useFeedback } from '../components/FeedbackProvider';
+import { useFeedback } from '../hooks/useFeedback';
 
 const ORDER_STATUSES = [
   { value: 'reserved', label: 'Резерв' },

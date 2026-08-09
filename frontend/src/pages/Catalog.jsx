@@ -21,6 +21,7 @@ const EMPTY_FORM = {
 const Catalog = () => {
   const isManager = localStorage.getItem('user_role') === 'manager';
   const [products, setProducts] = useState([]);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -30,22 +31,27 @@ const Catalog = () => {
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
-
-  const fetchProducts = async () => {
-    try {
-      const response = await api.get(
-        `/catalog/product_cards/?page=${page + 1}&search=${encodeURIComponent(search)}`
-      );
-      setProducts(response.data.results || response.data);
-      setTotalCount(response.data.count || 0);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const [listVersion, setListVersion] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
+    const fetchProducts = async () => {
+      try {
+        const response = await api.get(
+          `/catalog/product_cards/?page=${page + 1}&search=${encodeURIComponent(search)}`
+        );
+        if (cancelled) return;
+        setProducts(response.data.results || response.data);
+        setTotalCount(response.data.count || 0);
+      } catch (err) {
+        if (!cancelled) console.error(err);
+      }
+    };
     fetchProducts();
-  }, [page]);
+    return () => {
+      cancelled = true;
+    };
+  }, [page, search, listVersion]);
 
   useEffect(() => {
     api.get('/catalog/product_categories/')
@@ -57,8 +63,9 @@ const Catalog = () => {
   }, []);
 
   const handleSearch = () => {
-    if (page !== 0) setPage(0);
-    else fetchProducts();
+    setPage(0);
+    setSearch(searchInput);
+    setListVersion((v) => v + 1);
   };
 
   const handleInputChange = (e) => {
@@ -117,7 +124,7 @@ const Catalog = () => {
       await api.post('/catalog/product_cards/', built.payload);
       setOpenModal(false);
       setFormData(EMPTY_FORM);
-      fetchProducts();
+      setListVersion((v) => v + 1);
     } catch (error) {
       console.error('Failed to add product', error);
       setFormError(`Не удалось создать товар: ${extractApiError(error)}`);
@@ -136,8 +143,8 @@ const Catalog = () => {
             placeholder="Поиск…"
             size="small"
             sx={{ width: 350 }}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSearch();
             }}

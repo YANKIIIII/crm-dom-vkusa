@@ -9,54 +9,62 @@ import api from '../api';
 import { formatCurrency, PAGE_SIZE } from '../utils';
 
 const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
+  const [searchInput, setSearchInput] = useState('');
+  const [categoryInput, setCategoryInput] = useState('');
+  const [price, setPrice] = useState('');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
-  const [price, setPrice] = useState('');
   
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [listVersion, setListVersion] = useState(0);
   
   const [selectedIds, setSelectedIds] = useState([]);
 
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (category) params.append('category', category);
-      params.append('page', page);
-      // price filtering can be added later
-      
-      const res = await api.get(`/catalog/product_cards/?${params.toString()}`);
-      if (res.data.results) {
-        setProducts(res.data.results);
-        setTotalPages(Math.max(1, Math.ceil(res.data.count / PAGE_SIZE)));
-        setTotalCount(res.data.count);
-      } else {
-        setProducts(res.data);
-        setTotalPages(1);
-        setTotalCount(res.data.length);
-      }
-    } catch (err) {
-      console.error("Failed to search products", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (open) {
-      fetchProducts();
-      setSelectedIds([]);
-    }
-  }, [open, page]);
+    if (!open) return;
+    let cancelled = false;
+    const fetchProducts = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (category) params.append('category', category);
+        params.append('page', page);
+        // price filtering can be added later
+
+        const res = await api.get(`/catalog/product_cards/?${params.toString()}`);
+        if (cancelled) return;
+        if (res.data.results) {
+          setProducts(res.data.results);
+          setTotalPages(Math.max(1, Math.ceil(res.data.count / PAGE_SIZE)));
+          setTotalCount(res.data.count);
+        } else {
+          setProducts(res.data);
+          setTotalPages(1);
+          setTotalCount(res.data.length);
+        }
+      } catch (err) {
+        if (!cancelled) console.error("Failed to search products", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchProducts();
+    setSelectedIds([]);
+    return () => {
+      cancelled = true;
+    };
+  }, [open, page, search, category, listVersion]);
 
   const handleSearchClick = () => {
     setPage(1);
-    fetchProducts();
+    setSearch(searchInput);
+    setCategory(categoryInput);
+    setListVersion((v) => v + 1);
   };
 
   const handleToggleSelect = (id) => {
@@ -92,8 +100,8 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
             fullWidth
             size="small"
             placeholder="Поиск…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearchClick()}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
             slotProps={{ input: { 'aria-label': 'Поиск товаров' } }}
@@ -104,8 +112,8 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
                 fullWidth
                 size="small"
                 displayEmpty
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                value={categoryInput}
+                onChange={(e) => setCategoryInput(e.target.value)}
                 sx={{ borderRadius: 2 }}
               >
                 <MenuItem value="">Категория</MenuItem>

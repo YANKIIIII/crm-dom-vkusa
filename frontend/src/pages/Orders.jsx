@@ -6,7 +6,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
-import { useFeedback } from '../components/FeedbackProvider';
+import { useFeedback } from '../hooks/useFeedback';
 import { PAGE_SIZE, formatCurrency, formatDate, extractApiError } from '../utils';
 
 const isDeletableStatus = (status) => status !== 'completed';
