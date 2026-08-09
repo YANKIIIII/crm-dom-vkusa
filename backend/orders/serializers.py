@@ -32,6 +32,19 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = '__all__'
+        read_only_fields = (
+            'created_by',
+            'completed_at',
+            'created_at',
+            'updated_at',
+            'seller_name',
+            'client_name',
+            'client_last_name',
+            'sales_channel_name',
+            'status_display',
+            'total',
+            'items',
+        )
         extra_kwargs = {
             'order_number': {'required': False},
             'seller': {'required': False},

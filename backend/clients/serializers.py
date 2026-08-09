@@ -8,6 +8,16 @@ class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
         fields = '__all__'
+        read_only_fields = (
+            'total_budget',
+            'first_purchase_date',
+            'last_purchase_date',
+            'purchase_category',
+            'created_at',
+            'updated_at',
+            'primary_phone',
+            'grill_type_display',
+        )
 
     def get_primary_phone(self, obj):
         phones = obj.phones.all()
