@@ -86,9 +86,17 @@ const diffWritable = (current, baseline) => {
 const OrderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { notify, confirm } = useFeedback();
-  const [tab, setTab] = useState(0);
+
+  const tabFromUrl = Number(searchParams.get('tab') || '0');
+  const tab = tabFromUrl === 1 ? 1 : 0;
+
+  const setTab = (next) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', String(next));
+    setSearchParams(params, { replace: true });
+  };
 
   const [order, setOrder] = useState(null);
   const [loadError, setLoadError] = useState(null);
