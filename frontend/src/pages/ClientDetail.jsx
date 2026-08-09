@@ -473,18 +473,7 @@ const ClientDetail = () => {
           </Typography>
 
           <Box sx={{ border: '1px solid #EDF2F7', borderRadius: 4, p: 3 }}>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 3 }}>
-              <TextField placeholder="Поиск" size="small" sx={{ width: 250 }} />
-              <Select value="" displayEmpty size="small" sx={{ width: 200, color: '#718096' }}>
-                <MenuItem value="">Фильтр</MenuItem>
-              </Select>
-              <Box sx={{ flexGrow: 1 }} />
-              <Button
-                variant="outlined"
-                sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }}
-              >
-                ПОИСК
-              </Button>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
               <Button
                 variant="contained"
                 sx={{
