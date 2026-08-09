@@ -445,6 +445,8 @@ const ALLOWED = {
 
 **Phase A exit:** продавец проходит цикл без «В разработке» на критичном пути.
 
+> **COMPLETED 2026-08-09** — A1–A13 done. Evidence: pytest 36 passed; smoke_api 20/20; smoke_ui 10/10. Commits through `04e3dea` + plan `68b603a`.
+
 ---
 
 # PHASE B — Менеджер и справочники
