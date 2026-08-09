@@ -133,10 +133,11 @@ const OrderDetail = () => {
   const canDeleteOrder = userRole === 'manager' && !isNew && !isTerminal;
 
   const isDirty = useMemo(() => {
-    if (!order || !baseline) return false;
+    if (!order) return false;
     if (isNew) {
       return Boolean(order.order_date || order.sales_channel || order.client || order.comment);
     }
+    if (!baseline) return false;
     return Object.keys(diffWritable(order, baseline)).length > 0;
   }, [order, baseline, isNew]);
 
