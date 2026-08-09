@@ -23,8 +23,9 @@ const Warehouse = () => {
   const [productOptions, setProductOptions] = useState([]);
   const [productSearchLoading, setProductSearchLoading] = useState(false);
   const [qtyDrafts, setQtyDrafts] = useState({});
-  const [savingQtyId, setSavingQtyId] = useState(null);
+  const [savingQtyIds, setSavingQtyIds] = useState(() => new Set());
   const searchTimerRef = useRef(null);
+  const productSearchSeqRef = useRef(0);
 
   const fetchStock = () => {
     api.get('/warehouse/stock_items/')
@@ -33,15 +34,20 @@ const Warehouse = () => {
   };
 
   const loadProductOptions = async (search = '') => {
+    const requestId = ++productSearchSeqRef.current;
     setProductSearchLoading(true);
     try {
       const params = search ? { search } : {};
       const res = await api.get('/catalog/product_cards/', { params });
+      if (requestId !== productSearchSeqRef.current) return;
       setProductOptions(res.data.results || res.data);
     } catch (err) {
+      if (requestId !== productSearchSeqRef.current) return;
       console.error('Failed to load products', err);
     } finally {
-      setProductSearchLoading(false);
+      if (requestId === productSearchSeqRef.current) {
+        setProductSearchLoading(false);
+      }
     }
   };
 
@@ -94,32 +100,37 @@ const Warehouse = () => {
     setQtyDrafts(prev => ({ ...prev, [itemId]: value }));
   };
 
+  const clearQtyDraftIfUnchanged = (itemId, expectedDraft) => {
+    setQtyDrafts(prev => {
+      if (prev[itemId] !== expectedDraft) return prev;
+      const nextDrafts = { ...prev };
+      delete nextDrafts[itemId];
+      return nextDrafts;
+    });
+  };
+
   const handleQtySave = async (item) => {
     const draft = qtyDrafts[item.id];
     if (draft === undefined) return;
     const next = Number(draft);
     if (!Number.isFinite(next) || next < 0 || next === item.stock_quantity) {
-      setQtyDrafts(prev => {
-        const nextDrafts = { ...prev };
-        delete nextDrafts[item.id];
-        return nextDrafts;
-      });
+      clearQtyDraftIfUnchanged(item.id, draft);
       return;
     }
-    setSavingQtyId(item.id);
+    setSavingQtyIds(prev => new Set(prev).add(item.id));
     try {
       await api.patch(`/warehouse/stock_items/${item.id}/`, { stock_quantity: next });
-      setQtyDrafts(prev => {
-        const nextDrafts = { ...prev };
-        delete nextDrafts[item.id];
-        return nextDrafts;
-      });
+      clearQtyDraftIfUnchanged(item.id, draft);
       fetchStock();
     } catch (error) {
       console.error('Failed to update quantity', error);
       alert(`Не удалось обновить остаток:\n${extractApiError(error)}`);
     } finally {
-      setSavingQtyId(null);
+      setSavingQtyIds(prev => {
+        const nextIds = new Set(prev);
+        nextIds.delete(item.id);
+        return nextIds;
+      });
     }
   };
 
@@ -185,7 +196,7 @@ const Warehouse = () => {
                             e.target.blur();
                           }
                         }}
-                        disabled={savingQtyId === item.id}
+                        disabled={savingQtyIds.has(item.id)}
                         inputProps={{ min: 0, style: { textAlign: 'right', width: 72 } }}
                         onClick={(e) => e.stopPropagation()}
                       />
