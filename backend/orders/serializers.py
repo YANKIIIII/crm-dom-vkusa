@@ -32,6 +32,10 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = '__all__'
+        extra_kwargs = {
+            'order_number': {'required': False},
+            'seller': {'required': False},
+        }
 
     def validate_status(self, value):
         # Creation may start at any status; the state machine applies only on update.

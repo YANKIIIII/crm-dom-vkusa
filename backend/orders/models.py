@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Max
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
 from users.models import User
@@ -76,6 +77,9 @@ class Order(models.Model):
         return self.total_amount - self.total_cost
 
     def save(self, *args, **kwargs):
+        if not self.pk and not self.order_number:
+            last = Order.objects.aggregate(m=Max('order_number'))['m'] or 0
+            self.order_number = last + 1
         if self.client and not self.pk:
             self.discount_percent = self.client.discount_percent
         super().save(*args, **kwargs)
