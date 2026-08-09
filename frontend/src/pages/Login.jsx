@@ -48,7 +48,9 @@ const Login = () => {
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 2 }}>
       <Paper sx={{ p: 4, display: 'flex', flexDirection: 'column', gap: 3, width: 400, alignItems: 'center' }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold' }}>Дом Вкуса</Typography>
-        <Typography variant="body1" color="text.secondary">Войдите в систему</Typography>
+        <Typography variant="body1" sx={{
+          color: "text.secondary"
+        }}>Войдите в систему</Typography>
         
         {error && (
           <Alert severity="error" role="alert" aria-live="assertive" sx={{ width: '100%' }}>

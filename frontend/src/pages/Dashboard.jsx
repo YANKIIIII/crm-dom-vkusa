@@ -26,10 +26,24 @@ const StatCard = ({ title, value, prefix = '', suffix = '' }) => (
     }
   }}>
     <CardContent sx={{ p: 3 }}>
-      <Typography color="text.secondary" gutterBottom variant="subtitle2" fontWeight="600" textTransform="uppercase">
+      <Typography
+        gutterBottom
+        variant="subtitle2"
+        sx={{
+          color: "text.secondary",
+          fontWeight: "600",
+          textTransform: "uppercase"
+        }}>
         {title}
       </Typography>
-      <Typography variant="h4" component="div" fontWeight="700" sx={{ color: 'primary.main', mt: 1 }}>
+      <Typography
+        variant="h4"
+        component="div"
+        sx={{
+          fontWeight: "700",
+          color: 'primary.main',
+          mt: 1
+        }}>
         {prefix}{value}{suffix}
       </Typography>
     </CardContent>
@@ -57,13 +71,21 @@ const Dashboard = () => {
   }, []);
 
   if (loading) return (
-    <Box display="flex" justifyContent="center" alignItems="center" height="80vh">
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        height: "80vh"
+      }}>
       <CircularProgress color="primary" />
     </Box>
   );
 
   if (error) return (
-    <Box p={3}>
+    <Box sx={{
+      p: 3
+    }}>
       <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>
     </Box>
   );
@@ -71,24 +93,31 @@ const Dashboard = () => {
 
   return (
     <Box sx={{ flexGrow: 1, p: { xs: 2, md: 4 } }}>
-      <Typography variant="h4" gutterBottom fontWeight="700" sx={{ mb: 4, color: 'text.primary' }}>
+      <Typography
+        variant="h4"
+        gutterBottom
+        sx={{
+          fontWeight: "700",
+          mb: 4,
+          color: 'text.primary'
+        }}>
         Аналитика и Дашборд
       </Typography>
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <StatCard 
             title="Общая выручка" 
             value={data.total_revenue ? formatCurrency(data.total_revenue) : '0 BYN'} 
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <StatCard 
             title="Выполнено заказов" 
             value={data.total_completed_orders || 0} 
           />
         </Grid>
-        <Grid item xs={12} sm={12} md={4}>
+        <Grid size={{ xs: 12, sm: 12, md: 4 }}>
           <StatCard 
             title="Средний чек" 
             value={data.total_completed_orders ? formatCurrency(Math.round(data.total_revenue / data.total_completed_orders)) : '0 BYN'} 
@@ -97,9 +126,15 @@ const Dashboard = () => {
       </Grid>
 
       <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Paper sx={{ p: 3, height: 450, display: 'flex', flexDirection: 'column', borderRadius: 4, boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.03)' }}>
-            <Typography variant="h6" gutterBottom fontWeight="600" sx={{ mb: 3 }}>
+            <Typography
+              variant="h6"
+              gutterBottom
+              sx={{
+                fontWeight: "600",
+                mb: 3
+              }}>
               Динамика выручки (30 дней)
             </Typography>
             <Box sx={{ flexGrow: 1, minHeight: 0 }}>
@@ -140,17 +175,31 @@ const Dashboard = () => {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-                  <Typography color="text.secondary">Нет данных для графика</Typography>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    height: "100%"
+                  }}>
+                  <Typography sx={{
+                    color: "text.secondary"
+                  }}>Нет данных для графика</Typography>
                 </Box>
               )}
             </Box>
           </Paper>
         </Grid>
         
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Paper sx={{ p: 3, height: 450, display: 'flex', flexDirection: 'column', borderRadius: 4, boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.03)' }}>
-            <Typography variant="h6" gutterBottom fontWeight="600" sx={{ mb: 3 }}>
+            <Typography
+              variant="h6"
+              gutterBottom
+              sx={{
+                fontWeight: "600",
+                mb: 3
+              }}>
               Заказы по статусам
             </Typography>
             <Box sx={{ flexGrow: 1, minHeight: 0 }}>
@@ -180,17 +229,31 @@ const Dashboard = () => {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-                  <Typography color="text.secondary">Нет данных</Typography>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    height: "100%"
+                  }}>
+                  <Typography sx={{
+                    color: "text.secondary"
+                  }}>Нет данных</Typography>
                 </Box>
               )}
             </Box>
           </Paper>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Paper sx={{ p: 3, borderRadius: 4, boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.03)' }}>
-            <Typography variant="h6" gutterBottom fontWeight="600" sx={{ mb: 3 }}>
+            <Typography
+              variant="h6"
+              gutterBottom
+              sx={{
+                fontWeight: "600",
+                mb: 3
+              }}>
               Популярные товары (Топ 5)
             </Typography>
             {data.popular_items && data.popular_items.length > 0 ? (
@@ -212,7 +275,11 @@ const Dashboard = () => {
                         }}
                       >
                         <TableCell component="th" scope="row">
-                          <Box display="flex" alignItems="center">
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center"
+                            }}>
                             <Box 
                               sx={{ 
                                 width: 8, 
@@ -222,11 +289,17 @@ const Dashboard = () => {
                                 mr: 2
                               }} 
                             />
-                            <Typography fontWeight="500">{row.name}</Typography>
+                            <Typography sx={{
+                              fontWeight: "500"
+                            }}>{row.name}</Typography>
                           </Box>
                         </TableCell>
                         <TableCell align="right">
-                          <Typography fontWeight="600" color="primary.main">
+                          <Typography
+                            sx={{
+                              fontWeight: "600",
+                              color: "primary.main"
+                            }}>
                             {row.total_sold}
                           </Typography>
                         </TableCell>
@@ -236,7 +309,11 @@ const Dashboard = () => {
                 </Table>
               </TableContainer>
             ) : (
-              <Typography color="text.secondary" sx={{ py: 2 }}>
+              <Typography
+                sx={{
+                  color: "text.secondary",
+                  py: 2
+                }}>
                 Нет проданных товаров за этот период.
               </Typography>
             )}

@@ -60,7 +60,7 @@ const Sidebar = ({ mobile = false, mobileOpen = false, onClose }) => {
               </ListItemIcon>
               <ListItemText
                 primary={item.text}
-                primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: 500 }}
+                slotProps={{ primary: { sx: { fontSize: '0.9rem', fontWeight: 500 } } }}
               />
               <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
             </ListItemButton>
@@ -86,7 +86,7 @@ const Sidebar = ({ mobile = false, mobileOpen = false, onClose }) => {
           </ListItemIcon>
           <ListItemText
             primary="Выйти"
-            primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: 500 }}
+            slotProps={{ primary: { sx: { fontSize: '0.9rem', fontWeight: 500 } } }}
           />
         </ListItemButton>
       </Box>

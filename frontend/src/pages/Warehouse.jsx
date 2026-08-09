@@ -220,7 +220,7 @@ const Warehouse = () => {
                           }
                         }}
                         disabled={savingQtyIds.has(item.id)}
-                        inputProps={{ min: 0, style: { textAlign: 'right', width: 72 } }}
+                        slotProps={{ htmlInput: { min: 0, style: { textAlign: 'right', width: 72 } } }}
                         onClick={(e) => e.stopPropagation()}
                       />
                     ) : (
@@ -281,22 +281,27 @@ const Warehouse = () => {
               getOptionLabel={(option) => option ? `${option.sku || '—'} — ${option.name || ''}` : ''}
               isOptionEqualToValue={(option, value) => option.id === value.id}
               filterOptions={(x) => x}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Товар"
-                  placeholder="Поиск по артикулу или названию"
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {productSearchLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
-                  }}
-                />
-              )}
+              renderInput={(params) => {
+                const { InputProps, ...rest } = params;
+                return (
+                  <TextField
+                    {...rest}
+                    label="Товар"
+                    placeholder="Поиск по артикулу или названию"
+                    slotProps={{
+                      input: {
+                        ...InputProps,
+                        endAdornment: (
+                          <>
+                            {productSearchLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                            {InputProps.endAdornment}
+                          </>
+                        ),
+                      },
+                    }}
+                  />
+                );
+              }}
             />
             <TextField
               fullWidth
@@ -304,7 +309,7 @@ const Warehouse = () => {
               type="number"
               value={stockQuantity}
               onChange={(e) => setStockQuantity(e.target.value)}
-              inputProps={{ min: 0 }}
+              slotProps={{ htmlInput: { min: 0 } }}
             />
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>

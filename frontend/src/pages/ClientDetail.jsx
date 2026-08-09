@@ -157,7 +157,13 @@ const ClientDetail = () => {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="50vh">
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "50vh"
+        }}>
         <CircularProgress />
       </Box>
     );
@@ -198,12 +204,15 @@ const ClientDetail = () => {
           )}
 
           <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={3}>
+            <Grid size={{ xs: 12, sm: 3 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 Имя
               </Typography>
               <TextField
@@ -214,12 +223,15 @@ const ClientDetail = () => {
                 onChange={handleInputChange}
               />
             </Grid>
-            <Grid item xs={12} sm={3}>
+            <Grid size={{ xs: 12, sm: 3 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 Фамилия
               </Typography>
               <TextField
@@ -230,12 +242,15 @@ const ClientDetail = () => {
                 onChange={handleInputChange}
               />
             </Grid>
-            <Grid item xs={12} sm={3}>
+            <Grid size={{ xs: 12, sm: 3 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 Email
               </Typography>
               <TextField
@@ -247,12 +262,15 @@ const ClientDetail = () => {
               />
             </Grid>
             {isNew && (
-              <Grid item xs={12} sm={3}>
+              <Grid size={{ xs: 12, sm: 3 }}>
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  sx={{ ml: 1, mb: 0.5, display: 'block' }}
-                >
+                  sx={{
+                    color: "text.secondary",
+                    ml: 1,
+                    mb: 0.5,
+                    display: 'block'
+                  }}>
                   Телефон
                 </Typography>
                 <TextField
@@ -268,12 +286,15 @@ const ClientDetail = () => {
           </Grid>
 
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 Дата первого заказа
               </Typography>
               <TextField
@@ -285,12 +306,15 @@ const ClientDetail = () => {
                 disabled
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 Дата крайнего заказа
               </Typography>
               <TextField
@@ -302,12 +326,15 @@ const ClientDetail = () => {
                 disabled
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 Канал привлечения
               </Typography>
               <Select
@@ -330,12 +357,15 @@ const ClientDetail = () => {
               </Select>
             </Grid>
 
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 День рождения
               </Typography>
               <TextField
@@ -347,12 +377,15 @@ const ClientDetail = () => {
                 onChange={handleInputChange}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 Скидка
               </Typography>
               <TextField
@@ -361,19 +394,24 @@ const ClientDetail = () => {
                 name="discount_percent"
                 value={formData.discount_percent || 0}
                 onChange={handleInputChange}
-                InputProps={{
-                  endAdornment: (
-                    <Typography sx={{ color: '#718096', ml: 1 }}>%</Typography>
-                  ),
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <Typography sx={{ color: '#718096', ml: 1 }}>%</Typography>
+                    ),
+                  },
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 Тип гриля
               </Typography>
               <Select
@@ -393,12 +431,15 @@ const ClientDetail = () => {
               </Select>
             </Grid>
 
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 Общий бюджет
               </Typography>
               <TextField
@@ -443,7 +484,12 @@ const ClientDetail = () => {
                 </Table>
               </TableContainer>
             ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary",
+                  mb: 3
+                }}>
                 Телефоны не добавлены
               </Typography>
             )}

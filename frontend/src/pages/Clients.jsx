@@ -91,7 +91,7 @@ const Clients = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell padding="checkbox"><Checkbox inputProps={{ 'aria-label': 'Выбрать всех клиентов' }} /></TableCell>
+                <TableCell padding="checkbox"><Checkbox slotProps={{ input: { 'aria-label': 'Выбрать всех клиентов' } }} /></TableCell>
                 <TableCell>ФИО</TableCell>
                 <TableCell>Телефон</TableCell>
                 <TableCell>Скидка</TableCell>
@@ -115,7 +115,7 @@ const Clients = () => {
                 clients.map((row) => (
                   <TableRow key={row.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/clients/${row.id}`)}>
                     <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox inputProps={{ 'aria-label': 'Выбрать клиента' }} onClick={(e) => e.stopPropagation()} />
+                      <Checkbox slotProps={{ input: { 'aria-label': 'Выбрать клиента' } }} onClick={(e) => e.stopPropagation()} />
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>

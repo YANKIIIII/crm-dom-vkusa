@@ -9,7 +9,12 @@ const RoleRoute = ({ roles, children }) => {
         <Alert severity="warning" sx={{ mb: 2 }}>
           Недостаточно прав
         </Alert>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography
+          variant="body1"
+          sx={{
+            color: "text.secondary",
+            mb: 2
+          }}>
           Эта страница доступна только менеджерам.
         </Typography>
         <Button component={RouterLink} to="/orders" variant="contained">

@@ -98,7 +98,7 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
           />
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Select
                 fullWidth
                 size="small"
@@ -113,7 +113,7 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
                 ))}
               </Select>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -123,7 +123,7 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Button 
                 variant="contained" 
                 fullWidth 
@@ -154,7 +154,7 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
                     checked={products.length > 0 && selectedIds.length === products.length}
                     indeterminate={selectedIds.length > 0 && selectedIds.length < products.length}
                     onChange={handleToggleAll}
-                    inputProps={{ 'aria-label': 'Выбрать все товары' }}
+                    slotProps={{ input: { 'aria-label': 'Выбрать все товары' } }}
                   />
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, fontSize: '0.75rem', borderBottom: 'none' }}>Товар / Артикул</TableCell>
@@ -198,7 +198,7 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
                           checked={isSelected}
                           onClick={(e) => e.stopPropagation()}
                           onChange={() => handleToggleSelect(product.id)}
-                          inputProps={{ 'aria-label': 'Выбрать товар' }}
+                          slotProps={{ input: { 'aria-label': 'Выбрать товар' } }}
                         />
                       </TableCell>
                       <TableCell>

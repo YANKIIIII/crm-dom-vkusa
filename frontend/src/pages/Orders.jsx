@@ -91,7 +91,7 @@ const Orders = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell padding="checkbox"><Checkbox inputProps={{ 'aria-label': 'Выбрать все заказы' }} /></TableCell>
+                <TableCell padding="checkbox"><Checkbox slotProps={{ input: { 'aria-label': 'Выбрать все заказы' } }} /></TableCell>
                 <TableCell>№ Заказа</TableCell>
                 <TableCell>Дата заказа</TableCell>
                 <TableCell>Продавец</TableCell>
@@ -114,7 +114,7 @@ const Orders = () => {
                 orders.map((row) => (
                   <TableRow key={row.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/orders/${row.id}`)}>
                     <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox inputProps={{ 'aria-label': 'Выбрать заказ' }} onClick={(e) => e.stopPropagation()} />
+                      <Checkbox slotProps={{ input: { 'aria-label': 'Выбрать заказ' } }} onClick={(e) => e.stopPropagation()} />
                     </TableCell>
                     <TableCell sx={{ color: '#4A5568' }}>#{row.order_number}</TableCell>
                     <TableCell sx={{ color: '#4A5568' }}>{formatDate(row.order_date) || '—'}</TableCell>

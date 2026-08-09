@@ -1,5 +1,5 @@
 import {
-  Box, Paper, Grid, Typography, Button, TextField, Table, TableBody, TableCell,
+  Alert, Box, Paper, Grid, Typography, Button, TextField, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Select, MenuItem, Checkbox, Dialog,
   DialogTitle, DialogContent, DialogActions, CircularProgress, List, ListItemButton,
   ListItemText, InputAdornment,
@@ -89,6 +89,7 @@ const OrderDetail = () => {
   const [tab, setTab] = useState(0);
 
   const [order, setOrder] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [baseline, setBaseline] = useState(null);
   const [channels, setChannels] = useState([]);
   const [deliveryServices, setDeliveryServices] = useState([]);
@@ -135,6 +136,7 @@ const OrderDetail = () => {
 
   useEffect(() => {
     const fetchOrderData = async () => {
+      setLoadError(null);
       try {
         const [channelRes, deliveryRes, paymentRes, productsRes] = await Promise.all([
           api.get('/orders/sales_channels/').catch(() => ({ data: [] })),
@@ -171,7 +173,12 @@ const OrderDetail = () => {
         }
       } catch (err) {
         console.error('Error fetching order data:', err);
-        if (isNew) setOrder(emptyNewOrder());
+        if (isNew) {
+          setOrder(emptyNewOrder());
+        } else {
+          setOrder(null);
+          setLoadError(extractApiError(err) || 'Не удалось загрузить заказ');
+        }
       }
     };
     if (id) fetchOrderData();
@@ -440,6 +447,19 @@ const OrderDetail = () => {
     }
   };
 
+  if (loadError) {
+    return (
+      <Box sx={{ p: 4, maxWidth: 640, margin: '0 auto' }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {loadError}
+        </Alert>
+        <Button variant="contained" onClick={() => navigate('/orders')}>
+          К списку заказов
+        </Button>
+      </Box>
+    );
+  }
+
   if (!order) {
     return (
       <Box sx={{ p: 4 }}>
@@ -542,12 +562,15 @@ const OrderDetail = () => {
                 {isNew ? 'Новый заказ' : `Заказ ${order.order_number}`}
               </Typography>
               <Grid container spacing={3} sx={{ mb: 3 }}>
-                <Grid item xs={4}>
+                <Grid size={4}>
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ ml: 1, mb: 0.5, display: 'block' }}
-                  >
+                    sx={{
+                      color: "text.secondary",
+                      ml: 1,
+                      mb: 0.5,
+                      display: 'block'
+                    }}>
                     Дата заказа *
                   </Typography>
                   <TextField
@@ -559,12 +582,15 @@ const OrderDetail = () => {
                     onChange={(e) => handleChange('order_date', e.target.value)}
                   />
                 </Grid>
-                <Grid item xs={4}>
+                <Grid size={4}>
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ ml: 1, mb: 0.5, display: 'block' }}
-                  >
+                    sx={{
+                      color: "text.secondary",
+                      ml: 1,
+                      mb: 0.5,
+                      display: 'block'
+                    }}>
                     Канал привлечения *
                   </Typography>
                   <Select
@@ -585,12 +611,15 @@ const OrderDetail = () => {
                     ))}
                   </Select>
                 </Grid>
-                <Grid item xs={4}>
+                <Grid size={4}>
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ ml: 1, mb: 0.5, display: 'block' }}
-                  >
+                    sx={{
+                      color: "text.secondary",
+                      ml: 1,
+                      mb: 0.5,
+                      display: 'block'
+                    }}>
                     Статус
                   </Typography>
                   <Select
@@ -610,9 +639,12 @@ const OrderDetail = () => {
               </Grid>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mb: 0.5, display: 'block' }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  ml: 1,
+                  mb: 0.5,
+                  display: 'block'
+                }}>
                 Примечание
               </Typography>
               <TextField
@@ -643,12 +675,15 @@ const OrderDetail = () => {
                 </Button>
               </Box>
               <Grid container spacing={3}>
-                <Grid item xs={4}>
+                <Grid size={4}>
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ ml: 1, mb: 0.5, display: 'block' }}
-                  >
+                    sx={{
+                      color: "text.secondary",
+                      ml: 1,
+                      mb: 0.5,
+                      display: 'block'
+                    }}>
                     Способ доставки
                   </Typography>
                   <Select
@@ -669,12 +704,15 @@ const OrderDetail = () => {
                     ))}
                   </Select>
                 </Grid>
-                <Grid item xs={4}>
+                <Grid size={4}>
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ ml: 1, mb: 0.5, display: 'block' }}
-                  >
+                    sx={{
+                      color: "text.secondary",
+                      ml: 1,
+                      mb: 0.5,
+                      display: 'block'
+                    }}>
                     Трек-номер
                   </Typography>
                   <TextField
@@ -684,12 +722,15 @@ const OrderDetail = () => {
                     onChange={(e) => handleChange('tracking_number', e.target.value)}
                   />
                 </Grid>
-                <Grid item xs={4}>
+                <Grid size={4}>
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ ml: 1, mb: 0.5, display: 'block' }}
-                  >
+                    sx={{
+                      color: "text.secondary",
+                      ml: 1,
+                      mb: 0.5,
+                      display: 'block'
+                    }}>
                     Дата доставки (окончания)
                   </Typography>
                   <TextField
@@ -737,7 +778,7 @@ const OrderDetail = () => {
                 </Box>
               </Box>
               <Grid container spacing={3}>
-                <Grid item xs={4}>
+                <Grid size={4}>
                   <TextField
                     fullWidth
                     size="small"
@@ -746,7 +787,7 @@ const OrderDetail = () => {
                     value={clientDisplayName}
                   />
                 </Grid>
-                <Grid item xs={4}>
+                <Grid size={4}>
                   <TextField
                     fullWidth
                     size="small"
@@ -808,7 +849,9 @@ const OrderDetail = () => {
                           <TableCell>
                             <Box>
                               <Typography variant="body2">{item.product_name}</Typography>
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>
                                 {item.product_sku}
                               </Typography>
                             </Box>
@@ -820,7 +863,7 @@ const OrderDetail = () => {
                               <TextField
                                 size="small"
                                 type="number"
-                                inputProps={{ min: 1, style: { width: 64 } }}
+                                slotProps={{ htmlInput: { min: 1, style: { width: 64 } } }}
                                 defaultValue={item.quantity}
                                 key={`${item.id}-${item.quantity}`}
                                 disabled={mutatingItems}
@@ -884,7 +927,7 @@ const OrderDetail = () => {
               </Box>
 
               <Grid container spacing={3} sx={{ mb: 3 }}>
-                <Grid item xs={5}>
+                <Grid size={5}>
                   <Select
                     fullWidth
                     size="small"
@@ -903,7 +946,7 @@ const OrderDetail = () => {
                     ))}
                   </Select>
                 </Grid>
-                <Grid item xs={5}>
+                <Grid size={5}>
                   <TextField
                     fullWidth
                     size="small"
@@ -912,10 +955,12 @@ const OrderDetail = () => {
                     value={paymentAmount}
                     disabled={isTerminal || isNew}
                     onChange={(e) => setPaymentAmount(e.target.value)}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">BYN</InputAdornment>
-                      ),
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">BYN</InputAdornment>
+                        ),
+                      },
                     }}
                   />
                 </Grid>
@@ -941,7 +986,12 @@ const OrderDetail = () => {
                   </Table>
                 </TableContainer>
               ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 3
+                  }}>
                   Платежей пока нет
                 </Typography>
               )}
@@ -971,7 +1021,9 @@ const OrderDetail = () => {
                       {formatCurrency(paidTotal)}
                     </Box>
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     Остаток: {formatCurrency(remaining)}
                   </Typography>
                 </Box>
@@ -1009,12 +1061,14 @@ const OrderDetail = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter') searchClients(clientSearch);
             }}
-            InputProps={{
-              endAdornment: (
-                <Button size="small" onClick={() => searchClients(clientSearch)}>
-                  Найти
-                </Button>
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <Button size="small" onClick={() => searchClients(clientSearch)}>
+                    Найти
+                  </Button>
+                ),
+              },
             }}
           />
           {clientSearchLoading ? (
@@ -1024,7 +1078,12 @@ const OrderDetail = () => {
           ) : (
             <List dense sx={{ maxHeight: 360, overflow: 'auto' }}>
               {clientResults.length === 0 ? (
-                <Typography color="text.secondary" sx={{ px: 2, py: 2 }}>
+                <Typography
+                  sx={{
+                    color: "text.secondary",
+                    px: 2,
+                    py: 2
+                  }}>
                   Клиенты не найдены
                 </Typography>
               ) : (
@@ -1054,7 +1113,12 @@ const OrderDetail = () => {
       >
         <DialogTitle>Добавить доп. телефон</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             Клиент: {clientDisplayName}
           </Typography>
           <TextField
