@@ -2,7 +2,7 @@ import {
   Alert, Box, Paper, Grid, Typography, Button, TextField, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Select, MenuItem, Checkbox, Dialog,
   DialogTitle, DialogContent, DialogActions, CircularProgress, List, ListItemButton,
-  ListItemText, InputAdornment,
+  ListItemText, InputAdornment, FormControl, InputLabel,
 } from '@mui/material';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
@@ -565,93 +565,66 @@ const OrderDetail = () => {
               </Typography>
               <Grid container spacing={3} sx={{ mb: 3 }}>
                 <Grid size={4}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: "text.secondary",
-                      ml: 1,
-                      mb: 0.5,
-                      display: 'block'
-                    }}>
-                    Дата заказа *
-                  </Typography>
                   <TextField
                     fullWidth
                     size="small"
                     type="date"
                     required
+                    label="Дата заказа"
+                    InputLabelProps={{ shrink: true }}
                     value={order.order_date || ''}
                     onChange={(e) => handleChange('order_date', e.target.value)}
                   />
                 </Grid>
                 <Grid size={4}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: "text.secondary",
-                      ml: 1,
-                      mb: 0.5,
-                      display: 'block'
-                    }}>
-                    Канал привлечения *
-                  </Typography>
-                  <Select
-                    fullWidth
-                    size="small"
-                    displayEmpty
-                    required
-                    value={order.sales_channel || ''}
-                    onChange={(e) => handleChange('sales_channel', e.target.value)}
-                  >
-                    <MenuItem value="" disabled>
-                      Выберите канал
-                    </MenuItem>
-                    {channels.map((c) => (
-                      <MenuItem key={c.id} value={c.id}>
-                        {c.name}
+                  <FormControl fullWidth size="small" required>
+                    <InputLabel id="order-sales-channel-label">Канал привлечения</InputLabel>
+                    <Select
+                      labelId="order-sales-channel-label"
+                      id="order-sales-channel"
+                      displayEmpty
+                      label="Канал привлечения"
+                      value={order.sales_channel || ''}
+                      onChange={(e) => handleChange('sales_channel', e.target.value)}
+                    >
+                      <MenuItem value="" disabled>
+                        Выберите канал
                       </MenuItem>
-                    ))}
-                  </Select>
+                      {channels.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>
+                          {c.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Grid>
                 <Grid size={4}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: "text.secondary",
-                      ml: 1,
-                      mb: 0.5,
-                      display: 'block'
-                    }}>
-                    Статус
-                  </Typography>
-                  <Select
+                  <FormControl
                     fullWidth
                     size="small"
-                    value={order.status || 'reserved'}
-                    onChange={(e) => handleStatusChange(e.target.value)}
                     disabled={saving || (!isNew && statusOptions.length <= 1)}
                   >
-                    {statusOptions.map((s) => (
-                      <MenuItem key={s.value} value={s.value}>
-                        {s.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
+                    <InputLabel id="order-status-label">Статус</InputLabel>
+                    <Select
+                      labelId="order-status-label"
+                      id="order-status"
+                      label="Статус"
+                      value={order.status || 'reserved'}
+                      onChange={(e) => handleStatusChange(e.target.value)}
+                    >
+                      {statusOptions.map((s) => (
+                        <MenuItem key={s.value} value={s.value}>
+                          {s.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Grid>
               </Grid>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                Примечание
-              </Typography>
               <TextField
                 fullWidth
                 size="small"
+                label="Примечание"
                 value={order.comment || ''}
                 onChange={(e) => handleChange('comment', e.target.value)}
               />
@@ -678,68 +651,45 @@ const OrderDetail = () => {
               </Box>
               <Grid container spacing={3}>
                 <Grid size={4}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: "text.secondary",
-                      ml: 1,
-                      mb: 0.5,
-                      display: 'block'
-                    }}>
-                    Способ доставки
-                  </Typography>
-                  <Select
-                    fullWidth
-                    size="small"
-                    displayEmpty
-                    inputRef={deliverySelectRef}
-                    value={order.delivery_service || ''}
-                    onChange={(e) =>
-                      handleChange('delivery_service', e.target.value || null)
-                    }
-                  >
-                    <MenuItem value="">Не указан</MenuItem>
-                    {deliveryServices.map((ds) => (
-                      <MenuItem key={ds.id} value={ds.id}>
-                        {ds.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="order-delivery-service-label">Способ доставки</InputLabel>
+                    <Select
+                      labelId="order-delivery-service-label"
+                      id="order-delivery-service"
+                      displayEmpty
+                      label="Способ доставки"
+                      inputRef={deliverySelectRef}
+                      value={order.delivery_service || ''}
+                      onChange={(e) =>
+                        handleChange('delivery_service', e.target.value || null)
+                      }
+                    >
+                      <MenuItem value="">Не указан</MenuItem>
+                      {deliveryServices.map((ds) => (
+                        <MenuItem key={ds.id} value={ds.id}>
+                          {ds.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Grid>
                 <Grid size={4}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: "text.secondary",
-                      ml: 1,
-                      mb: 0.5,
-                      display: 'block'
-                    }}>
-                    Трек-номер
-                  </Typography>
                   <TextField
                     fullWidth
                     size="small"
+                    label="Трек-номер"
                     value={order.tracking_number || ''}
                     onChange={(e) => handleChange('tracking_number', e.target.value)}
                   />
                 </Grid>
                 <Grid size={4}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: "text.secondary",
-                      ml: 1,
-                      mb: 0.5,
-                      display: 'block'
-                    }}>
-                    Дата завершения
-                  </Typography>
                   <TextField
                     fullWidth
                     size="small"
                     type="date"
                     disabled
+                    label="Дата завершения"
+                    InputLabelProps={{ shrink: true }}
                     value={order.completed_at ? order.completed_at.substring(0, 10) : ''}
                   />
                 </Grid>

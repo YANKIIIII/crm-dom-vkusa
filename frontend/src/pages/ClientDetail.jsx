@@ -207,57 +207,30 @@ const ClientDetail = () => {
 
           <Grid container spacing={3} sx={{ mb: 3 }}>
             <Grid size={{ xs: 12, sm: 3 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                Имя
-              </Typography>
               <TextField
                 fullWidth
                 size="small"
+                label="Имя"
                 name="first_name"
                 value={formData.first_name || ''}
                 onChange={handleInputChange}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 3 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                Фамилия
-              </Typography>
               <TextField
                 fullWidth
                 size="small"
+                label="Фамилия"
                 name="last_name"
                 value={formData.last_name || ''}
                 onChange={handleInputChange}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 3 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                Email
-              </Typography>
               <TextField
                 fullWidth
                 size="small"
+                label="Email"
                 name="email"
                 value={formData.email || ''}
                 onChange={handleInputChange}
@@ -265,19 +238,10 @@ const ClientDetail = () => {
             </Grid>
             {isNew && (
               <Grid size={{ xs: 12, sm: 3 }}>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: "text.secondary",
-                    ml: 1,
-                    mb: 0.5,
-                    display: 'block'
-                  }}>
-                  Телефон
-                </Typography>
                 <TextField
                   fullWidth
                   size="small"
+                  label="Телефон"
                   name="phone"
                   value={formData.phone || ''}
                   onChange={handleInputChange}
