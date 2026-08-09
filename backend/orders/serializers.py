@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from django.db.models import Sum
 from rest_framework import serializers
 from .models import (
     ALLOWED_STATUS_TRANSITIONS,
@@ -19,6 +22,47 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = '__all__'
 
+class OrderPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderPayment
+        fields = '__all__'
+
+    def validate(self, attrs):
+        amount = attrs.get('amount')
+        if amount is None and self.instance is not None:
+            amount = self.instance.amount
+
+        if amount is not None and amount <= Decimal('0'):
+            raise serializers.ValidationError(
+                {'amount': 'Сумма платежа должна быть больше нуля.'}
+            )
+
+        order = attrs.get('order')
+        if order is None and self.instance is not None:
+            order = self.instance.order
+
+        if order is None:
+            return attrs
+
+        if order.status in (Order.Status.COMPLETED, Order.Status.CANCELLED):
+            raise serializers.ValidationError(
+                'Нельзя добавлять или изменять платежи для завершённого или отменённого заказа.'
+            )
+
+        if amount is not None:
+            existing = OrderPayment.objects.filter(order=order)
+            if self.instance is not None:
+                existing = existing.exclude(pk=self.instance.pk)
+            paid = existing.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+            order_total = order.total_amount
+            tolerance = Decimal('0.01')
+            if paid + amount > order_total + tolerance:
+                raise serializers.ValidationError(
+                    f'Сумма платежей ({paid + amount}) превышает сумму заказа ({order_total}).'
+                )
+
+        return attrs
+
 class OrderSerializer(serializers.ModelSerializer):
     seller_name = serializers.CharField(source='seller.first_name', read_only=True)
     client_name = serializers.CharField(source='client.first_name', read_only=True)
@@ -27,6 +71,7 @@ class OrderSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     total = serializers.DecimalField(source='total_amount', max_digits=12, decimal_places=2, read_only=True)
     items = OrderItemSerializer(many=True, read_only=True)
+    payments = OrderPaymentSerializer(many=True, read_only=True)
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
     
     class Meta:
@@ -44,6 +89,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'status_display',
             'total',
             'items',
+            'payments',
         )
         extra_kwargs = {
             'order_number': {'required': False},
@@ -65,11 +111,6 @@ class OrderSerializer(serializers.ModelSerializer):
             )
         return value
 
-class OrderPaymentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = OrderPayment
-        fields = '__all__'
-
 class SalesChannelSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesChannel
@@ -84,4 +125,3 @@ class DeliveryServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryService
         fields = '__all__'
-

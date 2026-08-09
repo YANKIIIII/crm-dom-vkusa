@@ -122,6 +122,7 @@ class OrderPaymentViewSet(viewsets.ModelViewSet):
     queryset = OrderPayment.objects.select_related('order', 'payment_type').order_by('id')
     serializer_class = OrderPaymentSerializer
     permission_classes = [IsAuthenticated]
+    filterset_fields = ['order']
 
     def get_queryset(self):
         user = self.request.user
