@@ -341,7 +341,7 @@ const OrderDetail = () => {
     }
     setMutatingItems(true);
     try {
-      const promises = selectedProducts.map((product) => {
+      for (const product of selectedProducts) {
         // rrp is WITH VAT → store price WITHOUT VAT on the order item
         const priceExVat = product.rrp
           ? parseFloat(product.rrp) / 1.2
@@ -354,9 +354,8 @@ const OrderDetail = () => {
           cost_price: product.base_cost_price,
           vat_rate: 20,
         };
-        return api.post('/orders/order_items/', itemData);
-      });
-      await Promise.all(promises);
+        await api.post('/orders/order_items/', itemData);
+      }
       await refreshOrder();
     } catch (err) {
       console.error('Failed to add products', err);
