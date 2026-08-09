@@ -54,11 +54,26 @@ def main():
         content = page.content()
         check('orders list shows mock order 1111', '1111' in content)
 
-        # Seller login in a fresh context
+        # Seller login in a fresh context — must land on /orders (not analytics)
         ctx = browser.new_context()
         seller = ctx.new_page()
         login(seller, 'valentin', '123')
         check('seller login works', '/login' not in seller.url, f'url={seller.url}')
+        check(
+            'seller lands on /orders (not analytics)',
+            '/orders' in seller.url,
+            f'url={seller.url}',
+        )
+        # Soft-check: Logout control visible in sidebar (ASCII-safe via material icon)
+        seller.wait_for_selector('.material-icons', timeout=10000)
+        logout_visible = seller.locator('.material-icons', has_text='logout').count() > 0
+        if logout_visible:
+            check('Logout control visible (soft)', True)
+        else:
+            # Soft: do not fail the suite — log only
+            print('[SOFT] Logout control not found (non-blocking)')
+
+
         seller.goto(f'{BASE}/orders', wait_until='networkidle')
         check('seller sees own orders', '1111' in seller.content())
 

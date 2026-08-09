@@ -5,10 +5,21 @@ import json
 import sys
 import urllib.error
 import urllib.request
+from datetime import date
 
 BASE = 'http://localhost:8000/api/v1'
 PASS = 0
 FAIL = 0
+
+
+def check(name, ok, detail=''):
+    global PASS, FAIL
+    if ok:
+        PASS += 1
+        print(f'[OK] {name}')
+    else:
+        FAIL += 1
+        print(f'[FAIL] {name} {detail}')
 
 
 def req(method, path, token=None, body=None, expect=200):
@@ -70,6 +81,59 @@ def main():
     req('PATCH', f'/orders/orders/{o1111["id"]}/', token=sel_token,
         body={'status': 'confirmed'}, expect=200)
 
+    # Phase A: auto order_number on create (seller)
+    _, channels = req('GET', '/orders/sales_channels/', token=sel_token, expect=200)
+    if isinstance(channels, dict) and 'results' in channels:
+        channel_id = channels['results'][0]['id']
+    else:
+        channel_id = channels[0]['id']
+    status, created_order = req(
+        'POST', '/orders/orders/', token=sel_token,
+        body={'order_date': date.today().isoformat(), 'sales_channel': channel_id},
+        expect=201,
+    )
+    check(
+        'created order has order_number',
+        status == 201 and created_order and created_order.get('order_number') is not None,
+        f'body={created_order}',
+    )
+    if status == 201 and created_order and created_order.get('order_number') is not None:
+        print(f'       created order_number={created_order["order_number"]}')
+
+    # Phase A: client create with phone (seller)
+    status, created_client = req(
+        'POST', '/clients/clients/', token=sel_token,
+        body={'first_name': 'Smoke', 'last_name': 'Phone', 'phone': '+375291112233'},
+        expect=201,
+    )
+    check(
+        'client primary_phone set',
+        status == 201 and created_client and created_client.get('primary_phone') == '+375291112233',
+        f'body={created_client}',
+    )
+
+    # Phase A: total_budget is read-only
+    if status == 201 and created_client:
+        budget_before = created_client.get('total_budget')
+        _, patched = req(
+            'PATCH', f'/clients/clients/{created_client["id"]}/', token=sel_token,
+            body={'total_budget': '99999.00'},
+            expect=200,
+        )
+        budget_after = patched.get('total_budget') if patched else None
+        unchanged = (
+            budget_after is not None
+            and float(budget_after) == float(budget_before or 0)
+            and float(budget_after) != 99999.0
+        )
+        check(
+            'total_budget unchanged after PATCH 99999',
+            unchanged,
+            f'before={budget_before} after={budget_after}',
+        )
+    else:
+        check('total_budget unchanged after PATCH 99999', False, 'skipped — client create failed')
+
     # CORS preflight
     request = urllib.request.Request(
         f'{BASE}/token/',
@@ -81,14 +145,7 @@ def main():
     )
     with urllib.request.urlopen(request, timeout=10) as resp:
         origin = resp.headers.get('Access-Control-Allow-Origin')
-        ok = origin == 'http://localhost:5173'
-        global PASS, FAIL
-        if ok:
-            PASS += 1
-            print(f'[OK] CORS Allow-Origin={origin}')
-        else:
-            FAIL += 1
-            print(f'[FAIL] CORS Allow-Origin={origin}')
+        check('CORS Allow-Origin', origin == 'http://localhost:5173', f'got={origin}')
 
     print(f'\nSmoke API: {PASS} passed, {FAIL} failed')
     return 0 if FAIL == 0 else 1
