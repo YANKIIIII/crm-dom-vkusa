@@ -43,6 +43,7 @@ class ClientPhoneViewSet(viewsets.ModelViewSet):
     queryset = ClientPhone.objects.select_related('client').order_by('id')
     serializer_class = ClientPhoneSerializer
     permission_classes = [IsAuthenticated]
+    filterset_fields = ['client']
 
     def get_queryset(self):
         qs = super().get_queryset()
