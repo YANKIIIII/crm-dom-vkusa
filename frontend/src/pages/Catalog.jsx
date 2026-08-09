@@ -6,20 +6,30 @@ import { extractApiError, PAGE_SIZE } from '../utils';
 const Catalog = () => {
   const isManager = localStorage.getItem('user_role') === 'manager';
   const [products, setProducts] = useState([]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [openModal, setOpenModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({ name: '', sku: '', category: '', supplier: '', grill_type: 'charcoal', rrp: '', base_cost_price: '' });
   
-  const fetchProducts = () => {
-    api.get('/catalog/product_cards/')
-      .then(res => setProducts(res.data.results || res.data))
-      .catch(err => console.error(err));
+  const fetchProducts = async () => {
+    try {
+      const response = await api.get(`/catalog/product_cards/?page=${page + 1}&search=${search}`);
+      setProducts(response.data.results || response.data);
+      setTotalCount(response.data.count || 0);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {
     fetchProducts();
+  }, [page]);
+
+  useEffect(() => {
     api.get('/catalog/product_categories/')
       .then(r => setCategories(r.data.results || r.data))
       .catch(err => console.error("Failed to load categories", err));
@@ -27,6 +37,14 @@ const Catalog = () => {
       .then(r => setSuppliers(r.data.results || r.data))
       .catch(err => console.error("Failed to load suppliers", err));
   }, []);
+
+  const handleSearch = () => {
+    if (page !== 0) {
+      setPage(0);
+    } else {
+      fetchProducts();
+    }
+  };
 
   const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
@@ -54,6 +72,11 @@ const Catalog = () => {
             placeholder="Поиск по артикулу или названию" 
             size="small"
             sx={{ width: 350 }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSearch();
+            }}
           />
           <Select 
             value="" 
@@ -64,7 +87,7 @@ const Catalog = () => {
             <MenuItem value="">Все категории</MenuItem>
           </Select>
           <Box sx={{ flexGrow: 1 }} />
-          <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }}>
+          <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }} onClick={handleSearch}>
             ПОИСК
           </Button>
           {isManager && (
@@ -116,9 +139,9 @@ const Catalog = () => {
         
         <TablePagination
           component="div"
-          count={products.length}
-          page={0}
-          onPageChange={() => {}}
+          count={totalCount}
+          page={page}
+          onPageChange={(e, p) => setPage(p)}
           rowsPerPage={PAGE_SIZE}
           onRowsPerPageChange={() => {}}
           rowsPerPageOptions={[PAGE_SIZE]}

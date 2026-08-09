@@ -16,6 +16,9 @@ const getTagChipSx = (tag) => {
 const Warehouse = () => {
   const isManager = localStorage.getItem('user_role') === 'manager';
   const [stockItems, setStockItems] = useState([]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [openModal, setOpenModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [stockQuantity, setStockQuantity] = useState(0);
@@ -27,10 +30,14 @@ const Warehouse = () => {
   const searchTimerRef = useRef(null);
   const productSearchSeqRef = useRef(0);
 
-  const fetchStock = () => {
-    api.get('/warehouse/stock_items/')
-      .then(res => setStockItems(res.data.results || res.data))
-      .catch(err => console.error(err));
+  const fetchStock = async () => {
+    try {
+      const response = await api.get(`/warehouse/stock_items/?page=${page + 1}&search=${search}`);
+      setStockItems(response.data.results || response.data);
+      setTotalCount(response.data.count || 0);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const loadProductOptions = async (search = '') => {
@@ -53,7 +60,15 @@ const Warehouse = () => {
 
   useEffect(() => {
     fetchStock();
-  }, []);
+  }, [page]);
+
+  const handleSearch = () => {
+    if (page !== 0) {
+      setPage(0);
+    } else {
+      fetchStock();
+    }
+  };
 
   useEffect(() => {
     if (openModal) {
@@ -144,6 +159,11 @@ const Warehouse = () => {
             placeholder="Поиск по артикулу или названию" 
             size="small"
             sx={{ width: 350 }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSearch();
+            }}
           />
           <Select 
             value="" 
@@ -154,7 +174,7 @@ const Warehouse = () => {
             <MenuItem value="">Все теги</MenuItem>
           </Select>
           <Box sx={{ flexGrow: 1 }} />
-          <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }}>
+          <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }} onClick={handleSearch}>
             ПОИСК
           </Button>
           {isManager && (
@@ -231,9 +251,9 @@ const Warehouse = () => {
         
         <TablePagination
           component="div"
-          count={stockItems.length}
-          page={0}
-          onPageChange={() => {}}
+          count={totalCount}
+          page={page}
+          onPageChange={(e, p) => setPage(p)}
           rowsPerPage={PAGE_SIZE}
           onRowsPerPageChange={() => {}}
           rowsPerPageOptions={[PAGE_SIZE]}
