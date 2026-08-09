@@ -31,9 +31,12 @@ const Login = () => {
         role = role || 'seller';
         localStorage.setItem('user_role', role);
       } catch (e) {
-        console.error("Failed to fetch user role", e);
-        role = 'user';
-        localStorage.setItem('user_role', role);
+        console.error('Failed to fetch user role', e);
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_role');
+        setError('Не удалось загрузить профиль. Попробуйте ещё раз.');
+        return;
       }
 
       navigate(role === 'manager' ? '/' : '/orders');
