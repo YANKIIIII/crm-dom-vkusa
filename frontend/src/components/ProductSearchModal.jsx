@@ -192,8 +192,14 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
                       onClick={() => handleToggleSelect(product.id)}
                       sx={{ cursor: 'pointer' }}
                     >
-                      <TableCell padding="checkbox">
-                        <Checkbox size="small" checked={isSelected} inputProps={{ 'aria-label': 'Выбрать товар' }} />
+                      <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          size="small"
+                          checked={isSelected}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => handleToggleSelect(product.id)}
+                          inputProps={{ 'aria-label': 'Выбрать товар' }}
+                        />
                       </TableCell>
                       <TableCell>
                         <Box>

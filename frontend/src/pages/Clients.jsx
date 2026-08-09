@@ -1,33 +1,59 @@
 import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Checkbox, Select, MenuItem, Avatar, TablePagination } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { PAGE_SIZE, formatCurrency, formatDate } from '../utils';
 
 const Clients = () => {
-  const [clients, setClients] = useState([]);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const fetchClients = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get(`/clients/clients/?page=${page + 1}&search=${search}`);
-      setClients(response.data.results || response.data);
-      setTotalCount(response.data.count || 0);
-    } catch (error) {
-      console.error("Failed to fetch clients:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const urlSearch = searchParams.get('search') ?? '';
+  const urlPage1Based = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+  const page = urlPage1Based - 1; // 0-based for MUI
+
+  const [searchInput, setSearchInput] = useState(urlSearch);
+  const [clients, setClients] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setSearchInput(urlSearch);
+  }, [urlSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchClients = async () => {
+      setLoading(true);
+      try {
+        const response = await api.get(`/clients/clients/?page=${urlPage1Based}&search=${encodeURIComponent(urlSearch)}`);
+        if (cancelled) return;
+        setClients(response.data.results || response.data);
+        setTotalCount(response.data.count || 0);
+      } catch (error) {
+        if (!cancelled) console.error("Failed to fetch clients:", error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
     fetchClients();
-  }, [page]); // Reload when page changes
+    return () => { cancelled = true; };
+  }, [urlSearch, urlPage1Based]);
+
+  const updateUrl = (nextSearch, nextPage0Based) => {
+    const params = new URLSearchParams();
+    params.set('search', nextSearch);
+    params.set('page', String(nextPage0Based + 1));
+    setSearchParams(params);
+  };
+
+  const handleSearch = () => {
+    updateUrl(searchInput, 0);
+  };
+
+  const handlePageChange = (e, newPage) => {
+    updateUrl(urlSearch, newPage);
+  };
 
   return (
     <Box sx={{ maxWidth: 1400, margin: '0 auto' }}>
@@ -39,8 +65,9 @@ const Clients = () => {
             placeholder="Поиск" 
             size="small"
             sx={{ width: 300 }}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
           <Select 
             value="" 
@@ -51,7 +78,7 @@ const Clients = () => {
             <MenuItem value="">Фильтр</MenuItem>
           </Select>
           <Box sx={{ flexGrow: 1 }} />
-          <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }} onClick={() => { setPage(0); fetchClients(); }}>
+          <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }} onClick={handleSearch}>
             ПОИСК
           </Button>
           <Button variant="contained" color="primary" onClick={() => navigate('/clients/new')}>
@@ -86,7 +113,9 @@ const Clients = () => {
               ) : (
                 clients.map((row) => (
                   <TableRow key={row.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/clients/${row.id}`)}>
-                    <TableCell padding="checkbox"><Checkbox inputProps={{ 'aria-label': 'Выбрать клиента' }} /></TableCell>
+                    <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox inputProps={{ 'aria-label': 'Выбрать клиента' }} onClick={(e) => e.stopPropagation()} />
+                    </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <Avatar sx={{ width: 28, height: 28, fontSize: 11, bgcolor: '#CBD5E0', color: '#1A202C' }}>
@@ -119,7 +148,7 @@ const Clients = () => {
           component="div"
           count={totalCount}
           page={page}
-          onPageChange={(e, p) => setPage(p)}
+          onPageChange={handlePageChange}
           rowsPerPage={PAGE_SIZE}
           onRowsPerPageChange={() => {}}
           rowsPerPageOptions={[PAGE_SIZE]}
