@@ -1,4 +1,4 @@
-import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Select, MenuItem, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Autocomplete } from '@mui/material';
+import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Select, MenuItem, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Autocomplete, Alert } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import api from '../api';
 import { extractApiError, PAGE_SIZE } from '../utils';
@@ -21,6 +21,7 @@ const Warehouse = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [openModal, setOpenModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState(null);
   const [stockQuantity, setStockQuantity] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productOptions, setProductOptions] = useState([]);
@@ -74,6 +75,7 @@ const Warehouse = () => {
     if (openModal) {
       setSelectedProduct(null);
       setStockQuantity(0);
+      setFormError(null);
       loadProductOptions();
     }
   }, [openModal]);
@@ -92,10 +94,11 @@ const Warehouse = () => {
 
   const handleCreateStock = async () => {
     if (!selectedProduct) {
-      alert('Выберите товар');
+      setFormError('Выберите товар');
       return;
     }
     setLoading(true);
+    setFormError(null);
     try {
       await api.post('/warehouse/stock_items/', {
         product_card: selectedProduct.id,
@@ -105,7 +108,7 @@ const Warehouse = () => {
       fetchStock();
     } catch (error) {
       console.error("Failed to add stock", error);
-      alert(`Не удалось добавить приход:\n${extractApiError(error)}`);
+      setFormError(`Не удалось добавить приход: ${extractApiError(error)}`);
     } finally {
       setLoading(false);
     }
@@ -264,6 +267,11 @@ const Warehouse = () => {
         <Dialog open={openModal} onClose={() => setOpenModal(false)} maxWidth="sm" fullWidth>
           <DialogTitle>Приход товара</DialogTitle>
           <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {formError && (
+              <Alert severity="error" role="alert" aria-live="assertive">
+                {formError}
+              </Alert>
+            )}
             <Autocomplete
               options={productOptions}
               value={selectedProduct}

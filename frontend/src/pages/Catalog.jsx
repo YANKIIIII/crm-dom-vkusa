@@ -1,4 +1,4 @@
-import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Select, MenuItem, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, FormControl, InputLabel } from '@mui/material';
+import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Select, MenuItem, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, FormControl, InputLabel, Alert } from '@mui/material';
 import { useEffect, useState } from 'react';
 import api from '../api';
 import { extractApiError, PAGE_SIZE } from '../utils';
@@ -13,6 +13,7 @@ const Catalog = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [openModal, setOpenModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState(null);
   const [formData, setFormData] = useState({ name: '', sku: '', category: '', supplier: '', grill_type: 'charcoal', rrp: '', base_cost_price: '' });
   
   const fetchProducts = async () => {
@@ -50,13 +51,14 @@ const Catalog = () => {
 
   const handleCreateProduct = async () => {
     setLoading(true);
+    setFormError(null);
     try {
       await api.post('/catalog/product_cards/', formData);
       setOpenModal(false);
       fetchProducts();
     } catch (error) {
       console.error("Failed to add product", error);
-      alert(`Не удалось создать товар:\n${extractApiError(error)}`);
+      setFormError(`Не удалось создать товар: ${extractApiError(error)}`);
     } finally {
       setLoading(false);
     }
@@ -91,7 +93,7 @@ const Catalog = () => {
             ПОИСК
           </Button>
           {isManager && (
-            <Button variant="contained" color="primary" onClick={() => setOpenModal(true)}>
+            <Button variant="contained" color="primary" onClick={() => { setFormError(null); setOpenModal(true); }}>
               НОВЫЙ ТОВАР +
             </Button>
           )}
@@ -152,6 +154,11 @@ const Catalog = () => {
         <Dialog open={openModal} onClose={() => setOpenModal(false)} maxWidth="sm" fullWidth>
           <DialogTitle>Новый товар</DialogTitle>
           <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {formError && (
+              <Alert severity="error" role="alert" aria-live="assertive">
+                {formError}
+              </Alert>
+            )}
             <TextField fullWidth label="Наименование" name="name" value={formData.name} onChange={handleInputChange} />
             <TextField fullWidth label="Артикул" name="sku" value={formData.sku} onChange={handleInputChange} />
             <FormControl fullWidth>

@@ -74,6 +74,7 @@ const Sidebar = () => {
         <Box sx={{ px: 2, pb: 2 }}>
           <ListItemButton
             onClick={logout}
+            aria-label="Выйти"
             sx={{
               borderRadius: '8px',
               color: '#718096',

@@ -78,7 +78,7 @@ const Clients = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell padding="checkbox"><Checkbox /></TableCell>
+                <TableCell padding="checkbox"><Checkbox inputProps={{ 'aria-label': 'Выбрать всех клиентов' }} /></TableCell>
                 <TableCell>ФИО</TableCell>
                 <TableCell>Телефон</TableCell>
                 <TableCell>Скидка</TableCell>
@@ -92,7 +92,7 @@ const Clients = () => {
             <TableBody>
               {clients.map((row, i) => (
                 <TableRow key={row.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/clients/${row.id}`)}>
-                  <TableCell padding="checkbox"><Checkbox /></TableCell>
+                  <TableCell padding="checkbox"><Checkbox inputProps={{ 'aria-label': 'Выбрать клиента' }} /></TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                       <Avatar sx={{ width: 28, height: 28, fontSize: 11, bgcolor: '#CBD5E0', color: '#1A202C' }}>

@@ -1,4 +1,4 @@
-import { Box, Typography, Paper, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, CircularProgress } from '@mui/material';
+import { Box, Typography, Paper, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel, CircularProgress, Alert } from '@mui/material';
 import { useEffect, useState } from 'react';
 import api from '../api';
 import { extractApiError } from '../utils';
@@ -7,6 +7,7 @@ const Users = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openModal, setOpenModal] = useState(false);
+  const [formError, setFormError] = useState(null);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -36,13 +37,14 @@ const Users = () => {
 
   const handleCreateUser = async () => {
     setLoading(true);
+    setFormError(null);
     try {
       await api.post('/users/users/', formData);
       setOpenModal(false);
       fetchUsers(); // refresh the list
     } catch (error) {
       console.error("Failed to create user", error);
-      alert(`Не удалось создать пользователя:\n${extractApiError(error)}`);
+      setFormError(`Не удалось создать пользователя: ${extractApiError(error)}`);
     } finally {
       setLoading(false);
     }
@@ -52,7 +54,7 @@ const Users = () => {
     <Box sx={{ maxWidth: 1400, margin: '0 auto' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4">Пользователи</Typography>
-        <Button variant="contained" color="primary" onClick={() => setOpenModal(true)}>
+        <Button variant="contained" color="primary" onClick={() => { setFormError(null); setOpenModal(true); }}>
           НОВЫЙ ПОЛЬЗОВАТЕЛЬ +
         </Button>
       </Box>
@@ -94,6 +96,11 @@ const Users = () => {
       <Dialog open={openModal} onClose={() => setOpenModal(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Создание пользователя</DialogTitle>
         <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {formError && (
+            <Alert severity="error" role="alert" aria-live="assertive">
+              {formError}
+            </Alert>
+          )}
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField fullWidth label="Имя" name="first_name" value={formData.first_name} onChange={handleInputChange} />
             <TextField fullWidth label="Фамилия" name="last_name" value={formData.last_name} onChange={handleInputChange} />

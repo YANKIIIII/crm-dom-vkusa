@@ -50,16 +50,23 @@ const Login = () => {
         <Typography variant="h4" sx={{ fontWeight: 'bold' }}>Дом Вкуса</Typography>
         <Typography variant="body1" color="text.secondary">Войдите в систему</Typography>
         
-        {error && <Alert severity="error" sx={{ width: '100%' }}>{error}</Alert>}
+        {error && (
+          <Alert severity="error" role="alert" aria-live="assertive" sx={{ width: '100%' }}>
+            {error}
+          </Alert>
+        )}
         
         <TextField 
+          id="login-username"
           fullWidth 
           label="Email (Username)" 
           variant="outlined" 
           value={username}
           onChange={(e) => setUsername(e.target.value)}
+          autoComplete="username"
         />
         <TextField 
+          id="login-password"
           fullWidth 
           label="Пароль" 
           type="password" 
@@ -67,6 +74,7 @@ const Login = () => {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+          autoComplete="current-password"
         />
         <Button 
           fullWidth 
