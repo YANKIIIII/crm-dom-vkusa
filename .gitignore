@@ -34,3 +34,6 @@ terminals/
 
 # Git worktrees (local isolated checkouts)
 .worktrees/
+
+# Local compose volume overrides
+docker-compose.override.yml
