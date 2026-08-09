@@ -1,4 +1,4 @@
-import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Select, MenuItem, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Autocomplete, Alert } from '@mui/material';
+import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Autocomplete, Alert } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import api from '../api';
 import { extractApiError, PAGE_SIZE } from '../utils';
@@ -168,14 +168,6 @@ const Warehouse = () => {
               if (e.key === 'Enter') handleSearch();
             }}
           />
-          <Select 
-            value="" 
-            displayEmpty 
-            size="small" 
-            sx={{ width: 200, color: '#718096' }}
-          >
-            <MenuItem value="">Все теги</MenuItem>
-          </Select>
           <Box sx={{ flexGrow: 1 }} />
           <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }} onClick={handleSearch}>
             ПОИСК

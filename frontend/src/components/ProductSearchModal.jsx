@@ -80,7 +80,7 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle sx={{ fontWeight: 600, fontSize: '1.25rem', pt: 3, pb: 2 }}>
         Поиск товара
       </DialogTitle>

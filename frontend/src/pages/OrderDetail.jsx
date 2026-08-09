@@ -731,7 +731,7 @@ const OrderDetail = () => {
                       mb: 0.5,
                       display: 'block'
                     }}>
-                    Дата доставки (окончания)
+                    Дата завершения
                   </Typography>
                   <TextField
                     fullWidth
@@ -1047,7 +1047,7 @@ const OrderDetail = () => {
         onClose={() => setOpenClientModal(false)}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
+        slotProps={{ paper: { sx: { borderRadius: 3 } } }}
       >
         <DialogTitle>Выбрать клиента</DialogTitle>
         <DialogContent>
@@ -1109,7 +1109,7 @@ const OrderDetail = () => {
         onClose={() => setOpenPhoneModal(false)}
         maxWidth="xs"
         fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
+        slotProps={{ paper: { sx: { borderRadius: 3 } } }}
       >
         <DialogTitle>Добавить доп. телефон</DialogTitle>
         <DialogContent>

@@ -1,4 +1,4 @@
-import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Checkbox, Select, MenuItem, Avatar, TablePagination } from '@mui/material';
+import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Checkbox, Avatar, TablePagination } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
@@ -70,14 +70,6 @@ const Clients = () => {
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
-          <Select 
-            value="" 
-            displayEmpty 
-            size="small" 
-            sx={{ width: 200, color: '#718096' }}
-          >
-            <MenuItem value="">Фильтр</MenuItem>
-          </Select>
           <Box sx={{ flexGrow: 1 }} />
           <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }} onClick={handleSearch}>
             ПОИСК
