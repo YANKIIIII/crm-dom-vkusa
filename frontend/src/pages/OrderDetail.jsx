@@ -95,7 +95,9 @@ const OrderDetail = () => {
   const [paymentTypes, setPaymentTypes] = useState([]);
   const [catalogProducts, setCatalogProducts] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [mutatingItems, setMutatingItems] = useState(false);
+  const userRole = localStorage.getItem('user_role');
 
   const [openProductDialog, setOpenProductDialog] = useState(false);
   const [openClientModal, setOpenClientModal] = useState(false);
@@ -117,6 +119,7 @@ const OrderDetail = () => {
 
   const isTerminal = order?.status === 'completed' || order?.status === 'cancelled';
   const isNew = id === 'new';
+  const canDeleteOrder = userRole === 'manager' && !isNew && !isTerminal;
 
   const refreshOrder = useCallback(async () => {
     if (isNew) return;
@@ -249,6 +252,27 @@ const OrderDetail = () => {
       alert(`Ошибка при сохранении:\n${extractApiError(err)}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!canDeleteOrder) return;
+    if (
+      !window.confirm(
+        'Удалить заказ? Товар вернётся на склад (если заказ не завершён/отменён).'
+      )
+    ) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await api.delete(`/orders/orders/${id}/`);
+      navigate('/orders');
+    } catch (err) {
+      alert(`Ошибка удаления заказа:\n${extractApiError(err)}`);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -490,14 +514,26 @@ const OrderDetail = () => {
               Товары и оплата
             </Button>
           </Box>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? <CircularProgress size={22} color="inherit" /> : 'СОХРАНИТЬ ЗАКАЗ'}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+            {canDeleteOrder && (
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={handleDeleteOrder}
+                disabled={deleting || saving}
+              >
+                {deleting ? <CircularProgress size={22} color="inherit" /> : 'Удалить заказ'}
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleSave}
+              disabled={saving || deleting}
+            >
+              {saving ? <CircularProgress size={22} color="inherit" /> : 'СОХРАНИТЬ ЗАКАЗ'}
+            </Button>
+          </Box>
         </Box>
 
         {tab === 0 && (
