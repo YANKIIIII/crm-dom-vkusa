@@ -45,7 +45,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         # Lock before validate_status so transitions use fresh DB status, not a stale get_object().
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        locked = self.get_queryset().select_for_update().get(pk=instance.pk)
+        # Plain Order table lock: get_queryset() has select_related/prefetch that Postgres rejects with FOR UPDATE on outer joins.
+        locked = Order.objects.select_for_update().get(pk=instance.pk)
         serializer = self.get_serializer(locked, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
