@@ -37,7 +37,7 @@ const Login = () => {
       }
 
       navigate(role === 'manager' ? '/' : '/orders');
-    } catch (err) {
+    } catch {
       setError('Неверное имя пользователя или пароль');
     } finally {
       setLoading(false);

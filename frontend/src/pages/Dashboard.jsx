@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Box, Typography, Grid, Card, CardContent, CircularProgress, Alert, Paper,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, useTheme
@@ -48,7 +48,7 @@ const Dashboard = () => {
         const response = await api.get('/analytics/sales/');
         setData(response.data);
         setLoading(false);
-      } catch (err) {
+      } catch {
         setError('Не удалось загрузить данные аналитики. Пожалуйста, проверьте подключение к серверу.');
         setLoading(false);
       }

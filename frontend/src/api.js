@@ -49,7 +49,7 @@ api.interceptors.response.use(
           localStorage.setItem('access_token', res.data.access);
           originalRequest.headers['Authorization'] = `Bearer ${res.data.access}`;
           return api(originalRequest);
-        } catch (e) {
+        } catch {
           // Refresh failed — fall through to logout
         }
       }
