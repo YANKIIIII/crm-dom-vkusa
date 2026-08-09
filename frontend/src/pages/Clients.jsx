@@ -1,17 +1,14 @@
-import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Checkbox, Select, MenuItem, Avatar, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress } from '@mui/material';
+import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Checkbox, Select, MenuItem, Avatar, TablePagination } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
-import { extractApiError, PAGE_SIZE } from '../utils';
+import { PAGE_SIZE } from '../utils';
 
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-  const [openModal, setOpenModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({ first_name: '', last_name: '', email: '', phone: '' });
   const navigate = useNavigate();
 
   const fetchClients = async () => {
@@ -27,22 +24,6 @@ const Clients = () => {
   useEffect(() => {
     fetchClients();
   }, [page]); // Reload when page changes
-
-  const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-
-  const handleCreateClient = async () => {
-    setLoading(true);
-    try {
-      await api.post('/clients/clients/', formData);
-      setOpenModal(false);
-      fetchClients();
-    } catch (error) {
-      console.error("Failed to create client", error);
-      alert(`Не удалось создать клиента:\n${extractApiError(error)}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <Box sx={{ maxWidth: 1400, margin: '0 auto' }}>
