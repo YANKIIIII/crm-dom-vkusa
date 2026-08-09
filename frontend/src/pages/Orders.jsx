@@ -247,7 +247,33 @@ const Orders = () => {
                           slotProps={{ input: { 'aria-label': `Выбрать заказ ${row.order_number}` } }}
                         />
                       </TableCell>
-                      <TableCell sx={{ color: '#4A5568' }}>#{row.order_number}</TableCell>
+                      <TableCell
+                        sx={{ color: '#4A5568' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/orders/${row.id}`);
+                        }}
+                      >
+                        <Box
+                          component="span"
+                          role="link"
+                          tabIndex={0}
+                          aria-label={`Открыть заказ ${row.order_number}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/orders/${row.id}`);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              navigate(`/orders/${row.id}`);
+                            }
+                          }}
+                        >
+                          #{row.order_number}
+                        </Box>
+                      </TableCell>
                       <TableCell sx={{ color: '#4A5568' }}>{formatDate(row.order_date) || '—'}</TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

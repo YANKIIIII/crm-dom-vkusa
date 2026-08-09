@@ -107,26 +107,30 @@ def main():
         # Navigate to orders
         page.goto(f'{BASE}/orders', wait_until='networkidle')
         check('orders page loads', page.locator('body').count() == 1)
-        # Expect mock order 1111 visible somewhere
+        page.wait_for_selector('table tbody tr input[type="checkbox"]', timeout=15000)
         content = page.content()
         check('orders list shows mock order 1111', '1111' in content)
 
         # List multi-select + delete outside order card (manager)
-        row_cb = page.locator('table tbody tr').first.locator('input[type="checkbox"]')
+        first_row = page.locator('table tbody tr').first
+        row_cb = first_row.locator('input[type="checkbox"]')
         row_cb.check()
         bulk = page.get_by_role('button', name=re.compile(r'Удалить выбранные', re.I))
         check('manager list shows bulk delete after select', bulk.count() > 0)
         row_del = page.get_by_role('button', name=re.compile(r'Удалить заказ', re.I))
         check('manager list has per-row delete control', row_del.count() > 0)
-        # Uncheck so later detail flow is clean
         row_cb.uncheck()
 
-        # Phase B: manager sees delete on non-terminal order (mock #1111)
-        page.get_by_text('#1111', exact=True).click()
-        page.wait_for_url(lambda url: '/orders/' in url and not url.rstrip('/').endswith('/orders'), timeout=15000)
+        # Open order via #number link (not whole row / checkbox)
+        order_link = page.get_by_text('#1111', exact=True)
+        if order_link.count() == 0:
+            order_link = page.locator('table tbody tr').first.get_by_text(re.compile(r'#\d+'))
+        order_num = order_link.first.inner_text().lstrip('#')
+        order_link.first.click()
+        page.wait_for_url(re.compile(r'/orders/\d+'), timeout=15000)
         page.wait_for_load_state('networkidle')
-        page.get_by_text('Заказ 1111', exact=False).wait_for(timeout=15000)
-        delete_btn = page.get_by_role('button', name='Удалить заказ')
+        page.get_by_text(f'Заказ {order_num}', exact=False).wait_for(timeout=15000)
+        delete_btn = page.get_by_role('button', name=re.compile(r'Удалить заказ', re.I))
         try:
             delete_btn.first.wait_for(state='visible', timeout=10000)
             has_delete = True
@@ -137,6 +141,19 @@ def main():
             'manager sees delete on non-terminal order',
             has_delete,
             f'url={page.url}',
+        )
+
+        # Clients list multi-select (manager)
+        page.goto(f'{BASE}/clients', wait_until='networkidle')
+        page.wait_for_selector('table tbody tr input[type="checkbox"]', timeout=15000)
+        page.locator('table tbody tr').first.locator('input[type="checkbox"]').check()
+        check(
+            'manager clients bulk delete after select',
+            page.get_by_role('button', name=re.compile(r'Удалить выбранных', re.I)).count() > 0,
+        )
+        check(
+            'manager clients per-row delete',
+            page.get_by_role('button', name=re.compile(r'Удалить клиента', re.I)).count() > 0,
         )
 
         # Seller login in a fresh context — must land on /orders (not analytics)
