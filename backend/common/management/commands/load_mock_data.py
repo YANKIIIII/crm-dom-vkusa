@@ -3,6 +3,7 @@ from django.conf import settings
 from users.models import User, UserProfile
 from catalog.models import ProductCategory, Supplier, ProductCard
 from warehouse.models import StockItem
+from warehouse.services import WarehouseService
 from clients.models import Client, ClientPhone
 from orders.models import SalesChannel, PaymentType, DeliveryService, Order, OrderItem, OrderPayment
 from common.models import AuditLog
@@ -96,7 +97,8 @@ class Command(BaseCommand):
             order_date='2026-07-23',
             comment='Доставить до двери'
         )
-        OrderItem.objects.create(order=o2, product_card=p1, cost_price=Decimal('4500.00'), price=Decimal('6500.00'), vat_rate=Decimal('20.00'), quantity=2)
+        item = OrderItem.objects.create(order=o2, product_card=p1, cost_price=Decimal('4500.00'), price=Decimal('6500.00'), vat_rate=Decimal('20.00'), quantity=2)
+        WarehouseService.reserve_stock_for_item(item)  # WEB-310: 8 -> 6
         OrderPayment.objects.create(order=o2, payment_type=pt_cash, amount=Decimal('15000.00'))
 
         self.stdout.write(self.style.SUCCESS("Data loading complete!"))
