@@ -159,12 +159,13 @@ const Orders = () => {
       <Paper sx={{ p: 0, overflow: 'hidden' }}>
         <Box sx={{ p: 3, display: 'flex', gap: 2, alignItems: 'center', borderBottom: '1px solid #EDF2F7' }}>
           <TextField
-            placeholder="Поиск"
+            placeholder="Поиск…"
             size="small"
             sx={{ width: 300 }}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            slotProps={{ input: { 'aria-label': 'Поиск заказов' } }}
           />
           <Box sx={{ flexGrow: 1 }} />
           {isManager && selectedIds.size > 0 && (

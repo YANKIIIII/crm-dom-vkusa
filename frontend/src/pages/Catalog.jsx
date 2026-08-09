@@ -133,7 +133,7 @@ const Catalog = () => {
       <Paper sx={{ p: 0, overflow: 'hidden' }}>
         <Box sx={{ p: 3, display: 'flex', gap: 2, alignItems: 'center', borderBottom: '1px solid #EDF2F7' }}>
           <TextField
-            placeholder="Поиск по артикулу или названию"
+            placeholder="Поиск…"
             size="small"
             sx={{ width: 350 }}
             value={search}
@@ -141,6 +141,7 @@ const Catalog = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSearch();
             }}
+            slotProps={{ input: { 'aria-label': 'Поиск товаров' } }}
           />
           <Box sx={{ flexGrow: 1 }} />
           <Button

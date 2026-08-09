@@ -160,8 +160,8 @@ const Warehouse = () => {
       
       <Paper sx={{ p: 0, overflow: 'hidden' }}>
         <Box sx={{ p: 3, display: 'flex', gap: 2, alignItems: 'center', borderBottom: '1px solid #EDF2F7' }}>
-          <TextField 
-            placeholder="Поиск по артикулу или названию" 
+          <TextField
+            placeholder="Поиск…"
             size="small"
             sx={{ width: 350 }}
             value={search}
@@ -169,6 +169,7 @@ const Warehouse = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSearch();
             }}
+            slotProps={{ input: { 'aria-label': 'Поиск товаров' } }}
           />
           <Box sx={{ flexGrow: 1 }} />
           <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }} onClick={handleSearch}>

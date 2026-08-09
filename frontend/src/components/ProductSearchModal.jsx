@@ -91,11 +91,12 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
           <TextField
             fullWidth
             size="small"
-            placeholder="Примечание"
+            placeholder="Поиск…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearchClick()}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+            slotProps={{ input: { 'aria-label': 'Поиск товаров' } }}
           />
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 4 }}>
@@ -228,9 +229,9 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mt: 1 }}>
            {/* Pagination placeholder as in mockup */}
-           <Typography variant="caption" sx={{ mr: 2, color: '#718096' }}>Rows per page: {PAGE_SIZE}</Typography>
+           <Typography variant="caption" sx={{ mr: 2, color: '#718096' }}>Строк на странице: {PAGE_SIZE}</Typography>
            <Typography variant="caption" sx={{ mr: 2, color: '#718096' }}>
-             {totalCount === 0 ? 0 : ((page - 1) * PAGE_SIZE) + 1}-{Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
+             {totalCount === 0 ? 0 : ((page - 1) * PAGE_SIZE) + 1}-{Math.min(page * PAGE_SIZE, totalCount)} из {totalCount}
            </Typography>
            <Pagination 
              count={totalPages} 
