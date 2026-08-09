@@ -478,6 +478,11 @@ const ALLOWED = {
 
 ### Task B5: Commit + pytest + smoke
 
+**Phase B exit:** менеджер удаляет заказ; продавец не пишет в каталог/склад; пагинация/поиск справочников; friendly forbidden на manager-only routes.
+
+> **COMPLETED 2026-08-09** — B1–B5 done. Evidence: pytest 36 passed; smoke_api 20/20; smoke_ui 12/12. Commits through Phase B FE (`a2a15bd`…`c4d3526`) + this verification.
+
+
 ---
 
 # PHASE C — Polish (Guidelines)

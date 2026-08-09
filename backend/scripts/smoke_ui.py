@@ -54,6 +54,24 @@ def main():
         content = page.content()
         check('orders list shows mock order 1111', '1111' in content)
 
+        # Phase B: manager sees delete on non-terminal order (mock #1111)
+        page.get_by_text('#1111', exact=True).click()
+        page.wait_for_url(lambda url: '/orders/' in url and not url.rstrip('/').endswith('/orders'), timeout=15000)
+        page.wait_for_load_state('networkidle')
+        page.get_by_text('Заказ 1111', exact=False).wait_for(timeout=15000)
+        delete_btn = page.get_by_role('button', name='Удалить заказ')
+        try:
+            delete_btn.first.wait_for(state='visible', timeout=10000)
+            has_delete = True
+        except Exception as e:
+            has_delete = False
+            print(f'       delete wait error: {e}')
+        check(
+            'manager sees delete on non-terminal order',
+            has_delete,
+            f'url={page.url}',
+        )
+
         # Seller login in a fresh context — must land on /orders (not analytics)
         ctx = browser.new_context()
         seller = ctx.new_page()
@@ -76,6 +94,15 @@ def main():
 
         seller.goto(f'{BASE}/orders', wait_until='networkidle')
         check('seller sees own orders', '1111' in seller.content())
+
+        # Phase B: seller direct / shows friendly forbidden (RoleRoute)
+        seller.goto(f'{BASE}/', wait_until='networkidle')
+        seller_body = seller.locator('body').inner_text()
+        check(
+            'seller on / sees Недостаточно прав',
+            'Недостаточно прав' in seller_body,
+            seller_body[:160],
+        )
 
         browser.close()
 
