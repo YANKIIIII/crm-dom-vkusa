@@ -1,13 +1,30 @@
-import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Select, MenuItem, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, FormControl, InputLabel } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Select, MenuItem, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Autocomplete } from '@mui/material';
+import { useEffect, useRef, useState } from 'react';
 import api from '../api';
 import { extractApiError, PAGE_SIZE } from '../utils';
 
+const getTagChipSx = (tag) => {
+  if (tag === 'Товар заканчивается') {
+    return { bgcolor: '#FEEBC8', color: '#DD6B20' };
+  }
+  if (tag === 'Нет в наличии') {
+    return { bgcolor: '#FED7D7', color: '#E53E3E' };
+  }
+  return { bgcolor: '#EDF2F7', color: '#4A5568' };
+};
+
 const Warehouse = () => {
+  const isManager = localStorage.getItem('user_role') === 'manager';
   const [stockItems, setStockItems] = useState([]);
   const [openModal, setOpenModal] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({ product_card: '', stock_quantity: 0, stock_tag: '' });
+  const [stockQuantity, setStockQuantity] = useState(0);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productOptions, setProductOptions] = useState([]);
+  const [productSearchLoading, setProductSearchLoading] = useState(false);
+  const [qtyDrafts, setQtyDrafts] = useState({});
+  const [savingQtyId, setSavingQtyId] = useState(null);
+  const searchTimerRef = useRef(null);
 
   const fetchStock = () => {
     api.get('/warehouse/stock_items/')
@@ -15,16 +32,54 @@ const Warehouse = () => {
       .catch(err => console.error(err));
   };
 
+  const loadProductOptions = async (search = '') => {
+    setProductSearchLoading(true);
+    try {
+      const params = search ? { search } : {};
+      const res = await api.get('/catalog/product_cards/', { params });
+      setProductOptions(res.data.results || res.data);
+    } catch (err) {
+      console.error('Failed to load products', err);
+    } finally {
+      setProductSearchLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchStock();
   }, []);
 
-  const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  useEffect(() => {
+    if (openModal) {
+      setSelectedProduct(null);
+      setStockQuantity(0);
+      loadProductOptions();
+    }
+  }, [openModal]);
+
+  useEffect(() => () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+  }, []);
+
+  const handleProductInputChange = (_event, value, reason) => {
+    if (reason !== 'input') return;
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      loadProductOptions(value.trim());
+    }, 300);
+  };
 
   const handleCreateStock = async () => {
+    if (!selectedProduct) {
+      alert('Выберите товар');
+      return;
+    }
     setLoading(true);
     try {
-      await api.post('/warehouse/stock_items/', formData);
+      await api.post('/warehouse/stock_items/', {
+        product_card: selectedProduct.id,
+        stock_quantity: Number(stockQuantity) || 0,
+      });
       setOpenModal(false);
       fetchStock();
     } catch (error) {
@@ -32,6 +87,39 @@ const Warehouse = () => {
       alert(`Не удалось добавить приход:\n${extractApiError(error)}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQtyChange = (itemId, value) => {
+    setQtyDrafts(prev => ({ ...prev, [itemId]: value }));
+  };
+
+  const handleQtySave = async (item) => {
+    const draft = qtyDrafts[item.id];
+    if (draft === undefined) return;
+    const next = Number(draft);
+    if (!Number.isFinite(next) || next < 0 || next === item.stock_quantity) {
+      setQtyDrafts(prev => {
+        const nextDrafts = { ...prev };
+        delete nextDrafts[item.id];
+        return nextDrafts;
+      });
+      return;
+    }
+    setSavingQtyId(item.id);
+    try {
+      await api.patch(`/warehouse/stock_items/${item.id}/`, { stock_quantity: next });
+      setQtyDrafts(prev => {
+        const nextDrafts = { ...prev };
+        delete nextDrafts[item.id];
+        return nextDrafts;
+      });
+      fetchStock();
+    } catch (error) {
+      console.error('Failed to update quantity', error);
+      alert(`Не удалось обновить остаток:\n${extractApiError(error)}`);
+    } finally {
+      setSavingQtyId(null);
     }
   };
 
@@ -58,9 +146,11 @@ const Warehouse = () => {
           <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }}>
             ПОИСК
           </Button>
-          <Button variant="contained" color="primary" onClick={() => setOpenModal(true)}>
-            ПРИХОД ТОВАРА +
-          </Button>
+          {isManager && (
+            <Button variant="contained" color="primary" onClick={() => setOpenModal(true)}>
+              ПРИХОД ТОВАРА +
+            </Button>
+          )}
         </Box>
 
         <TableContainer>
@@ -83,7 +173,25 @@ const Warehouse = () => {
                     color: item.stock_quantity === 0 ? '#E53E3E' : (item.stock_quantity < 5 ? '#DD6B20' : '#38A169'), 
                     fontWeight: 600 
                   }}>
-                    {item.stock_quantity}
+                    {isManager ? (
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={qtyDrafts[item.id] ?? item.stock_quantity}
+                        onChange={(e) => handleQtyChange(item.id, e.target.value)}
+                        onBlur={() => handleQtySave(item)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.target.blur();
+                          }
+                        }}
+                        disabled={savingQtyId === item.id}
+                        inputProps={{ min: 0, style: { textAlign: 'right', width: 72 } }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      item.stock_quantity
+                    )}
                   </TableCell>
                   <TableCell sx={{ color: '#4A5568' }}>{item.expiry_date || '—'}</TableCell>
                   <TableCell>
@@ -91,8 +199,7 @@ const Warehouse = () => {
                       <Chip 
                         label={item.stock_tag} 
                         sx={{ 
-                          bgcolor: item.stock_tag === 'Заканчивается' ? '#FEEBC8' : (item.stock_tag === 'Нет в наличии' ? '#FED7D7' : '#EDF2F7'),
-                          color: item.stock_tag === 'Заканчивается' ? '#DD6B20' : (item.stock_tag === 'Нет в наличии' ? '#E53E3E' : '#4A5568'),
+                          ...getTagChipSx(item.stock_tag),
                           fontWeight: 500,
                           height: 24,
                           fontSize: '0.75rem'
@@ -122,28 +229,53 @@ const Warehouse = () => {
         />
       </Paper>
 
-      <Dialog open={openModal} onClose={() => setOpenModal(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Приход товара</DialogTitle>
-        <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField fullWidth label="ID Товара (Product Card)" name="product_card" type="number" value={formData.product_card} onChange={handleInputChange} />
-          <TextField fullWidth label="Количество" name="stock_quantity" type="number" value={formData.stock_quantity} onChange={handleInputChange} />
-          <FormControl fullWidth>
-            <InputLabel>Тег</InputLabel>
-            <Select name="stock_tag" value={formData.stock_tag} label="Тег" onChange={handleInputChange}>
-              <MenuItem value="">Без тега</MenuItem>
-              <MenuItem value="В наличии">В наличии</MenuItem>
-              <MenuItem value="Заканчивается">Заканчивается</MenuItem>
-              <MenuItem value="Нет в наличии">Нет в наличии</MenuItem>
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setOpenModal(false)} color="inherit">Отмена</Button>
-          <Button onClick={handleCreateStock} variant="contained" disabled={loading}>
-            {loading ? <CircularProgress size={24} /> : 'Добавить'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {isManager && (
+        <Dialog open={openModal} onClose={() => setOpenModal(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Приход товара</DialogTitle>
+          <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Autocomplete
+              options={productOptions}
+              value={selectedProduct}
+              onChange={(_e, value) => setSelectedProduct(value)}
+              onInputChange={handleProductInputChange}
+              loading={productSearchLoading}
+              getOptionLabel={(option) => option ? `${option.sku || '—'} — ${option.name || ''}` : ''}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              filterOptions={(x) => x}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Товар"
+                  placeholder="Поиск по артикулу или названию"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {productSearchLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+            />
+            <TextField
+              fullWidth
+              label="Количество"
+              type="number"
+              value={stockQuantity}
+              onChange={(e) => setStockQuantity(e.target.value)}
+              inputProps={{ min: 0 }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ p: 2 }}>
+            <Button onClick={() => setOpenModal(false)} color="inherit">Отмена</Button>
+            <Button onClick={handleCreateStock} variant="contained" disabled={loading || !selectedProduct}>
+              {loading ? <CircularProgress size={24} /> : 'Добавить'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
 };

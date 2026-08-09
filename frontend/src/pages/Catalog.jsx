@@ -4,6 +4,7 @@ import api from '../api';
 import { extractApiError, PAGE_SIZE } from '../utils';
 
 const Catalog = () => {
+  const isManager = localStorage.getItem('user_role') === 'manager';
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -66,9 +67,11 @@ const Catalog = () => {
           <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }}>
             ПОИСК
           </Button>
-          <Button variant="contained" color="primary" onClick={() => setOpenModal(true)}>
-            НОВЫЙ ТОВАР +
-          </Button>
+          {isManager && (
+            <Button variant="contained" color="primary" onClick={() => setOpenModal(true)}>
+              НОВЫЙ ТОВАР +
+            </Button>
+          )}
         </Box>
 
         <TableContainer>
@@ -122,43 +125,45 @@ const Catalog = () => {
         />
       </Paper>
 
-      <Dialog open={openModal} onClose={() => setOpenModal(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Новый товар</DialogTitle>
-        <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField fullWidth label="Наименование" name="name" value={formData.name} onChange={handleInputChange} />
-          <TextField fullWidth label="Артикул" name="sku" value={formData.sku} onChange={handleInputChange} />
-          <FormControl fullWidth>
-            <InputLabel>Категория</InputLabel>
-            <Select name="category" value={formData.category} label="Категория" onChange={handleInputChange} displayEmpty>
-              <MenuItem value="" disabled>Категория</MenuItem>
-              {categories.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <FormControl fullWidth>
-            <InputLabel>Поставщик</InputLabel>
-            <Select name="supplier" value={formData.supplier} label="Поставщик" onChange={handleInputChange} displayEmpty>
-              <MenuItem value="" disabled>Поставщик</MenuItem>
-              {suppliers.map(s => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <FormControl fullWidth>
-            <InputLabel>Тип гриля</InputLabel>
-            <Select name="grill_type" value={formData.grill_type} label="Тип гриля" onChange={handleInputChange}>
-              <MenuItem value="charcoal">Угольный</MenuItem>
-              <MenuItem value="gas">Газовый</MenuItem>
-              <MenuItem value="ceramic">Керамический</MenuItem>
-            </Select>
-          </FormControl>
-          <TextField fullWidth label="РРЦ (BYN)" name="rrp" type="number" value={formData.rrp} onChange={handleInputChange} />
-          <TextField fullWidth label="Базовая себестоимость (BYN)" name="base_cost_price" type="number" value={formData.base_cost_price} onChange={handleInputChange} />
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setOpenModal(false)} color="inherit">Отмена</Button>
-          <Button onClick={handleCreateProduct} variant="contained" disabled={loading}>
-            {loading ? <CircularProgress size={24} /> : 'Добавить'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {isManager && (
+        <Dialog open={openModal} onClose={() => setOpenModal(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Новый товар</DialogTitle>
+          <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField fullWidth label="Наименование" name="name" value={formData.name} onChange={handleInputChange} />
+            <TextField fullWidth label="Артикул" name="sku" value={formData.sku} onChange={handleInputChange} />
+            <FormControl fullWidth>
+              <InputLabel>Категория</InputLabel>
+              <Select name="category" value={formData.category} label="Категория" onChange={handleInputChange} displayEmpty>
+                <MenuItem value="" disabled>Категория</MenuItem>
+                {categories.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Поставщик</InputLabel>
+              <Select name="supplier" value={formData.supplier} label="Поставщик" onChange={handleInputChange} displayEmpty>
+                <MenuItem value="" disabled>Поставщик</MenuItem>
+                {suppliers.map(s => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Тип гриля</InputLabel>
+              <Select name="grill_type" value={formData.grill_type} label="Тип гриля" onChange={handleInputChange}>
+                <MenuItem value="charcoal">Угольный</MenuItem>
+                <MenuItem value="gas">Газовый</MenuItem>
+                <MenuItem value="ceramic">Керамический</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField fullWidth label="РРЦ (BYN)" name="rrp" type="number" value={formData.rrp} onChange={handleInputChange} />
+            <TextField fullWidth label="Базовая себестоимость (BYN)" name="base_cost_price" type="number" value={formData.base_cost_price} onChange={handleInputChange} />
+          </DialogContent>
+          <DialogActions sx={{ p: 2 }}>
+            <Button onClick={() => setOpenModal(false)} color="inherit">Отмена</Button>
+            <Button onClick={handleCreateProduct} variant="contained" disabled={loading}>
+              {loading ? <CircularProgress size={24} /> : 'Добавить'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
 };
