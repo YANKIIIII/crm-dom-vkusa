@@ -6,11 +6,13 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
+import { useFeedback } from '../components/FeedbackProvider';
 import { PAGE_SIZE, formatCurrency, formatDate, extractApiError } from '../utils';
 
 const Clients = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { notify, confirm } = useFeedback();
   const isManager = localStorage.getItem('user_role') === 'manager';
 
   const urlSearch = searchParams.get('search') ?? '';
@@ -93,7 +95,7 @@ const Clients = () => {
 
   const deleteClientsByIds = async (ids) => {
     if (!ids.length) return;
-    if (!window.confirm(`Удалить выбранных клиентов (${ids.length})?`)) return;
+    if (!(await confirm(`Удалить выбранных клиентов (${ids.length})?`))) return;
 
     setDeleting(true);
     const errors = [];
@@ -116,7 +118,7 @@ const Clients = () => {
       setTotalCount(response.data.count || 0);
       setSelectedIds(new Set());
       if (errors.length) {
-        alert(`Часть клиентов не удалена:\n${errors.join('\n')}`);
+        notify(`Часть клиентов не удалена:\n${errors.join('\n')}`, 'error');
       }
     } finally {
       setDeleting(false);

@@ -1,6 +1,7 @@
 import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Autocomplete, Alert } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import api from '../api';
+import { useFeedback } from '../components/FeedbackProvider';
 import { extractApiError, PAGE_SIZE } from '../utils';
 
 const getTagChipSx = (tag) => {
@@ -14,6 +15,7 @@ const getTagChipSx = (tag) => {
 };
 
 const Warehouse = () => {
+  const { notify } = useFeedback();
   const isManager = localStorage.getItem('user_role') === 'manager';
   const [stockItems, setStockItems] = useState([]);
   const [search, setSearch] = useState('');
@@ -142,7 +144,7 @@ const Warehouse = () => {
       fetchStock();
     } catch (error) {
       console.error('Failed to update quantity', error);
-      alert(`Не удалось обновить остаток:\n${extractApiError(error)}`);
+      notify(`Не удалось обновить остаток:\n${extractApiError(error)}`, 'error');
     } finally {
       setSavingQtyIds(prev => {
         const nextIds = new Set(prev);

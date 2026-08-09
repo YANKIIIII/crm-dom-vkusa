@@ -6,6 +6,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
+import { useFeedback } from '../components/FeedbackProvider';
 import { PAGE_SIZE, formatCurrency, formatDate, extractApiError } from '../utils';
 
 const isDeletableStatus = (status) => status !== 'completed';
@@ -13,6 +14,7 @@ const isDeletableStatus = (status) => status !== 'completed';
 const Orders = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { notify, confirm } = useFeedback();
   const isManager = localStorage.getItem('user_role') === 'manager';
 
   const urlSearch = searchParams.get('search') ?? '';
@@ -99,7 +101,7 @@ const Orders = () => {
     const allowed = targets.filter((o) => isDeletableStatus(o.status));
 
     if (blocked.length && !allowed.length) {
-      alert('Нельзя удалить завершённые заказы.');
+      notify('Нельзя удалить завершённые заказы.', 'warning');
       return;
     }
 
@@ -107,7 +109,7 @@ const Orders = () => {
       ? `Удалить ${allowed.length} заказ(ов)? ${blocked.length} завершённых будут пропущены.`
       : `Удалить выбранные заказы (${allowed.length})? Товар вернётся на склад (если заказ не отменён).`;
 
-    if (!window.confirm(confirmMsg)) return;
+    if (!(await confirm(confirmMsg))) return;
 
     setDeleting(true);
     const errors = [];
@@ -126,7 +128,7 @@ const Orders = () => {
       setTotalCount(response.data.count || 0);
       setSelectedIds(new Set());
       if (errors.length) {
-        alert(`Часть заказов не удалена:\n${errors.join('\n')}`);
+        notify(`Часть заказов не удалена:\n${errors.join('\n')}`, 'error');
       }
     } finally {
       setDeleting(false);
@@ -142,7 +144,7 @@ const Orders = () => {
     e.stopPropagation();
     if (!isManager) return;
     if (!isDeletableStatus(order.status)) {
-      alert('Нельзя удалить завершённый заказ.');
+      notify('Нельзя удалить завершённый заказ.', 'warning');
       return;
     }
     deleteOrdersByIds([order.id]);
