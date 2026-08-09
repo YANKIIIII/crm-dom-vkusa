@@ -15,7 +15,10 @@ export function FeedbackProvider({ children }) {
 
   const confirm = useCallback((message, { title = 'Подтверждение' } = {}) => {
     return new Promise((resolve) => {
-      setConfirmState({ title, message: String(message), resolve });
+      setConfirmState((prev) => {
+        prev?.resolve(false);
+        return { title, message: String(message), resolve };
+      });
     });
   }, []);
 
@@ -47,9 +50,10 @@ export function FeedbackProvider({ children }) {
           setConfirmState(null);
         }}
         aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-description"
       >
         <DialogTitle id="confirm-dialog-title">{confirmState?.title}</DialogTitle>
-        <DialogContent>{confirmState?.message}</DialogContent>
+        <DialogContent id="confirm-dialog-description">{confirmState?.message}</DialogContent>
         <DialogActions>
           <Button
             onClick={() => {
