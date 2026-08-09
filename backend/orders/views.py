@@ -1,7 +1,11 @@
+from decimal import Decimal
+
 from django.db import transaction
+from django.db.models import Sum
 from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from common.permissions import IsManagerOrReadOnly
 from clients.services import ClientService
 from warehouse.services import WarehouseService
@@ -37,9 +41,23 @@ class OrderViewSet(viewsets.ModelViewSet):
             serializer.save(created_by=user)
 
     @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        # Lock before validate_status so transitions use fresh DB status, not a stale get_object().
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        locked = self.get_queryset().select_for_update().get(pk=instance.pk)
+        serializer = self.get_serializer(locked, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        if getattr(locked, '_prefetched_objects_cache', None):
+            locked._prefetched_objects_cache = {}
+
+        return Response(serializer.data)
+
+    @transaction.atomic
     def perform_update(self, serializer):
-        # Lock row so concurrent status transitions serialize and signal side-effects don't double-fire.
-        Order.objects.select_for_update().filter(pk=serializer.instance.pk).first()
+        # Row already locked in update(); keep atomic for signal side-effects.
         user = self.request.user
         if hasattr(user, 'role') and user.role == 'seller':
             # Нельзя менять продавца и создателя
@@ -54,9 +72,10 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_destroy(self, instance):
-        # Отменённый заказ уже вернул товар на склад, завершённый — товар продан;
-        # возвращаем резерв только для активных заказов.
-        if instance.status not in (Order.Status.CANCELLED, Order.Status.COMPLETED):
+        if instance.status == Order.Status.COMPLETED:
+            raise ValidationError("Нельзя удалить завершённый заказ.")
+        # Отменённый заказ уже вернул товар на склад; для активных — снимаем резерв.
+        if instance.status != Order.Status.CANCELLED:
             WarehouseService.release_items(instance)
         instance.delete()
 
@@ -67,6 +86,25 @@ def _ensure_order_active(order):
     if order.status in (Order.Status.COMPLETED, Order.Status.CANCELLED):
         raise ValidationError(
             "Нельзя изменять состав завершённого или отменённого заказа."
+        )
+
+
+def _recheck_payment_against_locked_order(order, amount, exclude_payment_pk=None):
+    """Re-validate terminal status and overpay against a locked order row."""
+    if order.status in (Order.Status.COMPLETED, Order.Status.CANCELLED):
+        raise ValidationError(
+            "Нельзя добавлять или изменять платежи для завершённого или отменённого заказа."
+        )
+    if amount is None:
+        return
+    existing = OrderPayment.objects.filter(order=order)
+    if exclude_payment_pk is not None:
+        existing = existing.exclude(pk=exclude_payment_pk)
+    paid = existing.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    tolerance = Decimal('0.01')
+    if paid + amount > order.total_amount + tolerance:
+        raise ValidationError(
+            f'Сумма платежей ({paid + amount}) превышает сумму заказа ({order.total_amount}).'
         )
 
 
@@ -131,19 +169,39 @@ class OrderPaymentViewSet(viewsets.ModelViewSet):
             qs = qs.filter(order__seller=user)
         return qs
 
+    @transaction.atomic
     def perform_create(self, serializer):
         order = serializer.validated_data.get('order')
         if hasattr(self.request.user, 'role') and self.request.user.role == 'seller':
             if order.seller != self.request.user:
                 raise PermissionDenied("Нельзя добавлять платежи в чужой заказ.")
-        serializer.save()
+        locked_order = Order.objects.select_for_update().get(pk=order.pk)
+        amount = serializer.validated_data.get('amount')
+        _recheck_payment_against_locked_order(locked_order, amount)
+        serializer.save(order=locked_order)
 
+    @transaction.atomic
     def perform_update(self, serializer):
-        order = serializer.validated_data.get('order')
+        payment = serializer.instance
+        order = serializer.validated_data.get('order', payment.order)
         if hasattr(self.request.user, 'role') and self.request.user.role == 'seller':
-            if order is not None and order.seller != self.request.user:
+            if order.seller != self.request.user:
                 raise PermissionDenied("Нельзя переносить платежи в чужой заказ.")
-        serializer.save()
+        locked_order = Order.objects.select_for_update().get(pk=order.pk)
+        amount = serializer.validated_data.get('amount', payment.amount)
+        _recheck_payment_against_locked_order(
+            locked_order, amount, exclude_payment_pk=payment.pk
+        )
+        serializer.save(order=locked_order)
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        locked_order = Order.objects.select_for_update().get(pk=instance.order_id)
+        if locked_order.status in (Order.Status.COMPLETED, Order.Status.CANCELLED):
+            raise ValidationError(
+                "Нельзя удалять платежи завершённого или отменённого заказа."
+            )
+        instance.delete()
 
 class SalesChannelViewSet(viewsets.ModelViewSet):
     queryset = SalesChannel.objects.order_by('id')
@@ -159,4 +217,3 @@ class DeliveryServiceViewSet(viewsets.ModelViewSet):
     queryset = DeliveryService.objects.order_by('id')
     serializer_class = DeliveryServiceSerializer
     permission_classes = [IsManagerOrReadOnly]
-

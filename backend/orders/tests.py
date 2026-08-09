@@ -161,6 +161,32 @@ def test_order_destroy_releases_stock_only_for_active_orders():
 
 
 @pytest.mark.django_db
+def test_cannot_delete_completed_order():
+    user = User.objects.create_user(
+        username='testuser_completed_del', email='completed_del@test.com',
+        password='pwd', role='manager', first_name='Test',
+    )
+    channel = SalesChannel.objects.create(name="Completed Delete Channel")
+    order = Order.objects.create(
+        order_number=12,
+        order_date=timezone.now().date(),
+        status=Order.Status.COMPLETED,
+        seller=user,
+        sales_channel=channel,
+        created_by=user,
+    )
+
+    api = APIClient()
+    api.force_authenticate(user=user)
+
+    response = api.delete(f'/api/v1/orders/orders/{order.pk}/')
+
+    assert response.status_code == 400
+    assert 'Нельзя удалить завершённый заказ' in str(response.data)
+    assert Order.objects.filter(pk=order.pk).exists()
+
+
+@pytest.mark.django_db
 def test_terminal_order_items_are_immutable():
     user = User.objects.create_user(username='testuser4', email='test4@test.com', password='pwd', role='manager', first_name='Test')
     category = ProductCategory.objects.create(name="Grills")
