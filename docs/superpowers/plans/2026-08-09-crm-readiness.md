@@ -511,6 +511,10 @@ const ALLOWED = {
 - Full pytest, smoke_api, smoke_ui, optional prod-compose smoke
 - Update this plan checkboxes / CHANGELOG note in commit message
 
+**Phase C exit:** Guidelines polish landed; dead code cleaned; full verification green.
+
+> **COMPLETED 2026-08-09** — C1–C6 done. Evidence: pytest 36 passed; smoke_api 20/20; smoke_ui 12/12. Commits through `d079e4e` + this verification.
+
 ---
 
 ## Out of scope (explicit YAGNI for this plan)
