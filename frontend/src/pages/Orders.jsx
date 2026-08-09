@@ -2,22 +2,26 @@ import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell,
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
-import { PAGE_SIZE } from '../utils';
+import { PAGE_SIZE, formatCurrency, formatDate } from '../utils';
 
 const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   const fetchOrders = async () => {
+    setLoading(true);
     try {
       const response = await api.get(`/orders/orders/?page=${page + 1}&search=${search}`);
       setOrders(response.data.results || response.data);
       setTotalCount(response.data.count || 0);
     } catch (error) {
       console.error("Failed to fetch orders:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -70,37 +74,47 @@ const Orders = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {orders.map((row, i) => (
-                <TableRow key={row.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/orders/${row.id}`)}>
-                  <TableCell padding="checkbox"><Checkbox inputProps={{ 'aria-label': 'Выбрать заказ' }} /></TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>#{row.order_number}</TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.order_date}</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Avatar sx={{ width: 24, height: 24, fontSize: 10, bgcolor: '#CBD5E0', color: '#1A202C' }}>
-                        {row.seller_name ? row.seller_name.substring(0, 2).toUpperCase() : 'ВА'}
-                      </Avatar>
-                      <Typography variant="body2">{row.seller_name || 'Неизвестно'}</Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.sales_channel_name}</TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.discount_percent}%</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={row.status_display} 
-                      size="small"
-                      variant="outlined"
-                      sx={{ 
-                        color: row.status === 'cancelled' ? '#E53E3E' : (row.status === 'completed' ? '#38A169' : '#D69E2E'),
-                        borderColor: row.status === 'cancelled' ? '#E53E3E' : (row.status === 'completed' ? '#38A169' : '#D69E2E'),
-                        height: 24,
-                        fontSize: '0.75rem'
-                      }} 
-                    />
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: '#4A5568' }}>{row.total} BYN</TableCell>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#718096' }}>Загрузка…</TableCell>
                 </TableRow>
-              ))}
+              ) : orders.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#718096' }}>Нет заказов</TableCell>
+                </TableRow>
+              ) : (
+                orders.map((row) => (
+                  <TableRow key={row.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/orders/${row.id}`)}>
+                    <TableCell padding="checkbox"><Checkbox inputProps={{ 'aria-label': 'Выбрать заказ' }} /></TableCell>
+                    <TableCell sx={{ color: '#4A5568' }}>#{row.order_number}</TableCell>
+                    <TableCell sx={{ color: '#4A5568' }}>{formatDate(row.order_date) || '—'}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Avatar sx={{ width: 24, height: 24, fontSize: 10, bgcolor: '#CBD5E0', color: '#1A202C' }}>
+                          {row.seller_name ? row.seller_name.substring(0, 2).toUpperCase() : 'ВА'}
+                        </Avatar>
+                        <Typography variant="body2">{row.seller_name || 'Неизвестно'}</Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ color: '#4A5568' }}>{row.sales_channel_name}</TableCell>
+                    <TableCell sx={{ color: '#4A5568' }}>{row.discount_percent}%</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={row.status_display} 
+                        size="small"
+                        variant="outlined"
+                        sx={{ 
+                          color: row.status === 'cancelled' ? '#E53E3E' : (row.status === 'completed' ? '#38A169' : '#D69E2E'),
+                          borderColor: row.status === 'cancelled' ? '#E53E3E' : (row.status === 'completed' ? '#38A169' : '#D69E2E'),
+                          height: 24,
+                          fontSize: '0.75rem'
+                        }} 
+                      />
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: '#4A5568' }}>{formatCurrency(row.total)}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>

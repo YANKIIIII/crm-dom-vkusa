@@ -444,7 +444,7 @@ const OrderDetail = () => {
   if (!order) {
     return (
       <Box sx={{ p: 4 }}>
-        <Typography>Загрузка...</Typography>
+        <Typography>Загрузка…</Typography>
       </Box>
     );
   }
@@ -834,10 +834,10 @@ const OrderDetail = () => {
                               />
                             )}
                           </TableCell>
-                          <TableCell>{item.price} BYN</TableCell>
+                          <TableCell>{formatCurrency(item.price)}</TableCell>
                           <TableCell>{item.vat_rate}%</TableCell>
                           <TableCell align="right" sx={{ fontWeight: 600 }}>
-                            {item.line_total} BYN
+                            {formatCurrency(item.line_total)}
                           </TableCell>
                           <TableCell align="right">
                             <Button

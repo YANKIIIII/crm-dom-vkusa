@@ -8,6 +8,16 @@ export const formatCurrency = (value) => {
   }).format(value);
 };
 
+const dateFormatter = new Intl.DateTimeFormat('ru-RU');
+
+/** Formats ISO / YYYY-MM-DD (or Date) for display. Returns '' for empty values. */
+export const formatDate = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return dateFormatter.format(date);
+};
+
 // Backend paginates all list endpoints with DRF PAGE_SIZE=20
 export const PAGE_SIZE = 20;
 

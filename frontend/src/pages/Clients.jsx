@@ -2,22 +2,26 @@ import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell,
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
-import { PAGE_SIZE } from '../utils';
+import { PAGE_SIZE, formatCurrency, formatDate } from '../utils';
 
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   const fetchClients = async () => {
+    setLoading(true);
     try {
       const response = await api.get(`/clients/clients/?page=${page + 1}&search=${search}`);
       setClients(response.data.results || response.data);
       setTotalCount(response.data.count || 0);
     } catch (error) {
       console.error("Failed to fetch clients:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -71,32 +75,42 @@ const Clients = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {clients.map((row, i) => (
-                <TableRow key={row.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/clients/${row.id}`)}>
-                  <TableCell padding="checkbox"><Checkbox inputProps={{ 'aria-label': 'Выбрать клиента' }} /></TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Avatar sx={{ width: 28, height: 28, fontSize: 11, bgcolor: '#CBD5E0', color: '#1A202C' }}>
-                        {row.first_name ? row.first_name.charAt(0) : ''}{row.last_name ? row.last_name.charAt(0) : ''}
-                      </Avatar>
-                      <Typography variant="body2" sx={{ color: '#4A5568' }}>{row.first_name} {row.last_name}</Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.primary_phone || '—'}</TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.discount_percent}%</TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.acquisition_source || '—'}</TableCell>
-                  <TableCell>
-                    {row.grill_type_display ? (
-                      <Box sx={{ bgcolor: '#EDF2F7', px: 1.5, py: 0.5, borderRadius: 4, display: 'inline-block', fontSize: '0.85rem', color: '#4A5568' }}>
-                        {row.grill_type_display}
-                      </Box>
-                    ) : '—'}
-                  </TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.first_purchase_date || '—'}</TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.last_purchase_date || '—'}</TableCell>
-                  <TableCell align="right" sx={{ color: '#4A5568' }}>{row.total_budget} BYN</TableCell>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4, color: '#718096' }}>Загрузка…</TableCell>
                 </TableRow>
-              ))}
+              ) : clients.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4, color: '#718096' }}>Нет клиентов</TableCell>
+                </TableRow>
+              ) : (
+                clients.map((row) => (
+                  <TableRow key={row.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/clients/${row.id}`)}>
+                    <TableCell padding="checkbox"><Checkbox inputProps={{ 'aria-label': 'Выбрать клиента' }} /></TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Avatar sx={{ width: 28, height: 28, fontSize: 11, bgcolor: '#CBD5E0', color: '#1A202C' }}>
+                          {row.first_name ? row.first_name.charAt(0) : ''}{row.last_name ? row.last_name.charAt(0) : ''}
+                        </Avatar>
+                        <Typography variant="body2" sx={{ color: '#4A5568' }}>{row.first_name} {row.last_name}</Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ color: '#4A5568' }}>{row.primary_phone || '—'}</TableCell>
+                    <TableCell sx={{ color: '#4A5568' }}>{row.discount_percent}%</TableCell>
+                    <TableCell sx={{ color: '#4A5568' }}>{row.acquisition_source || '—'}</TableCell>
+                    <TableCell>
+                      {row.grill_type_display ? (
+                        <Box sx={{ bgcolor: '#EDF2F7', px: 1.5, py: 0.5, borderRadius: 4, display: 'inline-block', fontSize: '0.85rem', color: '#4A5568' }}>
+                          {row.grill_type_display}
+                        </Box>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell sx={{ color: '#4A5568' }}>{formatDate(row.first_purchase_date) || '—'}</TableCell>
+                    <TableCell sx={{ color: '#4A5568' }}>{formatDate(row.last_purchase_date) || '—'}</TableCell>
+                    <TableCell align="right" sx={{ color: '#4A5568' }}>{formatCurrency(row.total_budget)}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
