@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { extractApiError, formatCurrency } from '../utils';
+import { useFeedback } from '../components/FeedbackProvider';
 
 const GRILL_TYPES = [
   { value: 'charcoal', label: 'Угольный' },
@@ -31,6 +32,7 @@ const CLIENT_WRITABLE = [
 const ClientDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { notify } = useFeedback();
   const [client, setClient] = useState(null);
   const [orders, setOrders] = useState([]);
   const [channels, setChannels] = useState([]);
@@ -112,23 +114,23 @@ const ClientDetail = () => {
           payload.phone = formData.phone;
         }
         if (!payload.first_name) {
-          alert('Укажите имя клиента');
+          notify('Укажите имя клиента', 'warning');
           return;
         }
         const res = await api.post('/clients/clients/', payload);
-        alert('Новый клиент создан');
+        notify('Новый клиент создан', 'success');
         navigate(`/clients/${res.data.id}`);
       } else {
         const payload = buildWritablePayload();
         await api.patch(`/clients/clients/${id}/`, payload);
-        alert('Клиент сохранен');
+        notify('Клиент сохранен', 'success');
         const clientRes = await api.get(`/clients/clients/${id}/`);
         setClient(clientRes.data);
         setFormData(clientRes.data);
       }
     } catch (err) {
       console.error('Failed to save client', err);
-      alert(`Ошибка при сохранении клиента:\n${extractApiError(err)}`);
+      notify(`Ошибка при сохранении клиента:\n${extractApiError(err)}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -136,7 +138,7 @@ const ClientDetail = () => {
 
   const handleAddPhone = async () => {
     if (!newPhone.trim()) {
-      alert('Введите номер телефона');
+      notify('Введите номер телефона', 'warning');
       return;
     }
     setPhoneSaving(true);
@@ -149,7 +151,7 @@ const ClientDetail = () => {
       setNewPhone('');
       await loadPhones(id);
     } catch (err) {
-      alert(`Ошибка добавления телефона:\n${extractApiError(err)}`);
+      notify(`Ошибка добавления телефона:\n${extractApiError(err)}`, 'error');
     } finally {
       setPhoneSaving(false);
     }

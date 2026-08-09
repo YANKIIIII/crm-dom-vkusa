@@ -9,6 +9,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { extractApiError, formatCurrency } from '../utils';
 import ProductSearchModal from '../components/ProductSearchModal';
+import { useFeedback } from '../components/FeedbackProvider';
 
 const ORDER_STATUSES = [
   { value: 'reserved', label: 'Резерв' },
@@ -86,6 +87,7 @@ const OrderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { notify, confirm } = useFeedback();
   const [tab, setTab] = useState(0);
 
   const [order, setOrder] = useState(null);
@@ -191,7 +193,7 @@ const OrderDetail = () => {
   const handleStatusChange = async (nextStatus) => {
     if (nextStatus === order.status) return;
     if (nextStatus === 'cancelled') {
-      if (!window.confirm('Отменить заказ? Это действие вернёт товар на склад.')) return;
+      if (!(await confirm('Отменить заказ? Это действие вернёт товар на склад.'))) return;
     }
 
     if (isNew) {
@@ -210,7 +212,7 @@ const OrderDetail = () => {
         await api.patch(`/orders/orders/${id}/`, { status: nextStatus });
         await refreshOrder();
       } catch (err) {
-        alert(`Ошибка смены статуса:\n${extractApiError(err)}`);
+        notify(`Ошибка смены статуса:\n${extractApiError(err)}`, 'error');
       } finally {
         setSaving(false);
       }
@@ -222,11 +224,11 @@ const OrderDetail = () => {
 
   const handleSave = async () => {
     if (!order.order_date) {
-      alert('Укажите дату заказа');
+      notify('Укажите дату заказа', 'warning');
       return;
     }
     if (!order.sales_channel) {
-      alert('Укажите канал привлечения');
+      notify('Укажите канал привлечения', 'warning');
       return;
     }
 
@@ -238,12 +240,12 @@ const OrderDetail = () => {
         if (!payload.client) delete payload.client;
         if (!payload.delivery_service) delete payload.delivery_service;
         const res = await api.post('/orders/orders/', payload);
-        alert('Новый заказ создан');
+        notify('Новый заказ создан', 'success');
         navigate(`/orders/${res.data.id}`);
       } else {
         const payload = diffWritable(order, baseline);
         if (Object.keys(payload).length === 0) {
-          alert('Нет изменений для сохранения');
+          notify('Нет изменений для сохранения', 'warning');
           return;
         }
         if (Object.keys(payload).length === 1 && payload.status !== undefined) {
@@ -251,12 +253,12 @@ const OrderDetail = () => {
         } else {
           await api.patch(`/orders/orders/${id}/`, payload);
         }
-        alert('Заказ сохранен');
+        notify('Заказ сохранен', 'success');
         await refreshOrder();
       }
     } catch (err) {
       console.error(err);
-      alert(`Ошибка при сохранении:\n${extractApiError(err)}`);
+      notify(`Ошибка при сохранении:\n${extractApiError(err)}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -265,9 +267,9 @@ const OrderDetail = () => {
   const handleDeleteOrder = async () => {
     if (!canDeleteOrder) return;
     if (
-      !window.confirm(
+      !(await confirm(
         'Удалить заказ? Товар вернётся на склад (если заказ не завершён/отменён).'
-      )
+      ))
     ) {
       return;
     }
@@ -277,7 +279,7 @@ const OrderDetail = () => {
       await api.delete(`/orders/orders/${id}/`);
       navigate('/orders');
     } catch (err) {
-      alert(`Ошибка удаления заказа:\n${extractApiError(err)}`);
+      notify(`Ошибка удаления заказа:\n${extractApiError(err)}`, 'error');
     } finally {
       setDeleting(false);
     }
@@ -313,11 +315,11 @@ const OrderDetail = () => {
 
   const handleAddPhone = async () => {
     if (!order.client) {
-      alert('Сначала выберите клиента');
+      notify('Сначала выберите клиента', 'warning');
       return;
     }
     if (!newPhone.trim()) {
-      alert('Введите номер телефона');
+      notify('Введите номер телефона', 'warning');
       return;
     }
     setPhoneSaving(true);
@@ -327,11 +329,11 @@ const OrderDetail = () => {
         number: newPhone.trim(),
         is_primary: false,
       });
-      alert('Телефон добавлен');
+      notify('Телефон добавлен', 'success');
       setNewPhone('');
       setOpenPhoneModal(false);
     } catch (err) {
-      alert(`Ошибка:\n${extractApiError(err)}`);
+      notify(`Ошибка:\n${extractApiError(err)}`, 'error');
     } finally {
       setPhoneSaving(false);
     }
@@ -339,11 +341,11 @@ const OrderDetail = () => {
 
   const handleAddProducts = async (selectedProducts) => {
     if (isNew) {
-      alert('Сначала сохраните заказ, чтобы добавлять в него товары');
+      notify('Сначала сохраните заказ, чтобы добавлять в него товары', 'warning');
       return;
     }
     if (isTerminal) {
-      alert('Нельзя изменять товары в завершённом или отменённом заказе');
+      notify('Нельзя изменять товары в завершённом или отменённом заказе', 'warning');
       return;
     }
     setMutatingItems(true);
@@ -366,7 +368,7 @@ const OrderDetail = () => {
       await refreshOrder();
     } catch (err) {
       console.error('Failed to add products', err);
-      alert(`Ошибка при добавлении товаров:\n${extractApiError(err)}`);
+      notify(`Ошибка при добавлении товаров:\n${extractApiError(err)}`, 'error');
       await refreshOrder();
     } finally {
       setMutatingItems(false);
@@ -382,7 +384,7 @@ const OrderDetail = () => {
       await api.patch(`/orders/order_items/${item.id}/`, { quantity });
       await refreshOrder();
     } catch (err) {
-      alert(`Ошибка изменения количества:\n${extractApiError(err)}`);
+      notify(`Ошибка изменения количества:\n${extractApiError(err)}`, 'error');
       await refreshOrder();
     } finally {
       setMutatingItems(false);
@@ -391,13 +393,13 @@ const OrderDetail = () => {
 
   const handleDeleteItem = async (item) => {
     if (isTerminal) return;
-    if (!window.confirm(`Удалить позицию «${item.product_name}»?`)) return;
+    if (!(await confirm(`Удалить позицию «${item.product_name}»?`))) return;
     setMutatingItems(true);
     try {
       await api.delete(`/orders/order_items/${item.id}/`);
       await refreshOrder();
     } catch (err) {
-      alert(`Ошибка удаления:\n${extractApiError(err)}`);
+      notify(`Ошибка удаления:\n${extractApiError(err)}`, 'error');
     } finally {
       setMutatingItems(false);
     }
@@ -405,20 +407,20 @@ const OrderDetail = () => {
 
   const handleAddPayment = async () => {
     if (isNew) {
-      alert('Сначала сохраните заказ');
+      notify('Сначала сохраните заказ', 'warning');
       return;
     }
     if (isTerminal) {
-      alert('Нельзя добавлять оплату к завершённому или отменённому заказу');
+      notify('Нельзя добавлять оплату к завершённому или отменённому заказу', 'warning');
       return;
     }
     if (!paymentType) {
-      alert('Выберите способ оплаты');
+      notify('Выберите способ оплаты', 'warning');
       return;
     }
     const amount = parseFloat(paymentAmount);
     if (!amount || amount <= 0) {
-      alert('Укажите сумму оплаты');
+      notify('Укажите сумму оплаты', 'warning');
       return;
     }
     setPaymentSaving(true);
@@ -432,7 +434,7 @@ const OrderDetail = () => {
       setPaymentAmount('');
       await refreshOrder();
     } catch (err) {
-      alert(`Ошибка добавления оплаты:\n${extractApiError(err)}`);
+      notify(`Ошибка добавления оплаты:\n${extractApiError(err)}`, 'error');
     } finally {
       setPaymentSaving(false);
     }
