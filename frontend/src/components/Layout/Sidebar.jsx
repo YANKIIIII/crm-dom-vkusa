@@ -14,87 +14,113 @@ const menuItems = [
   { text: 'Журнал', icon: 'history', path: '/audit', managerOnly: true },
 ];
 
-const Sidebar = () => {
+const drawerPaperSx = {
+  width: drawerWidth,
+  boxSizing: 'border-box',
+  backgroundColor: '#F5F7FA',
+  borderRight: 'none',
+};
+
+const Sidebar = ({ mobile = false, mobileOpen = false, onClose }) => {
   const userRole = localStorage.getItem('user_role');
   const visibleMenuItems = menuItems.filter(item => !item.managerOnly || userRole === 'manager');
+
+  const drawerContent = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+        <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1A202C' }}>
+          Дом Вкуса
+        </Typography>
+      </Box>
+      <List sx={{ px: 2, flex: 1 }}>
+        {visibleMenuItems.map((item) => (
+          <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
+            <ListItemButton
+              component={NavLink}
+              to={item.path}
+              onClick={mobile ? onClose : undefined}
+              sx={{
+                borderRadius: '8px',
+                color: '#718096',
+                '&.active': {
+                  backgroundColor: '#CC5E33',
+                  color: '#FFFFFF',
+                  '& .MuiListItemIcon-root': { color: '#FFFFFF' },
+                  '& .MuiListItemText-primary': { color: '#FFFFFF', fontWeight: 500 }
+                },
+                '&:hover:not(.active)': {
+                  backgroundColor: 'rgba(204, 94, 51, 0.1)',
+                  color: '#CC5E33',
+                  '& .MuiListItemIcon-root': { color: '#CC5E33' }
+                }
+              }}
+            >
+              <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
+                <span className="material-icons" style={{ fontSize: 20 }}>{item.icon}</span>
+              </ListItemIcon>
+              <ListItemText
+                primary={item.text}
+                primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: 500 }}
+              />
+              <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+      <Box sx={{ px: 2, pb: 2 }}>
+        <ListItemButton
+          onClick={logout}
+          aria-label="Выйти"
+          sx={{
+            borderRadius: '8px',
+            color: '#718096',
+            '&:hover': {
+              backgroundColor: 'rgba(204, 94, 51, 0.1)',
+              color: '#CC5E33',
+              '& .MuiListItemIcon-root': { color: '#CC5E33' }
+            }
+          }}
+        >
+          <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
+            <span className="material-icons" style={{ fontSize: 20 }}>logout</span>
+          </ListItemIcon>
+          <ListItemText
+            primary="Выйти"
+            primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: 500 }}
+          />
+        </ListItemButton>
+      </Box>
+    </Box>
+  );
+
+  if (mobile) {
+    return (
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={onClose}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: 'block', md: 'none' },
+          '& .MuiDrawer-paper': drawerPaperSx,
+        }}
+      >
+        {drawerContent}
+      </Drawer>
+    );
+  }
+
   return (
     <Drawer
       variant="permanent"
       sx={{
+        display: { xs: 'none', md: 'block' },
         width: drawerWidth,
         flexShrink: 0,
-        '& .MuiDrawer-paper': {
-          width: drawerWidth,
-          boxSizing: 'border-box',
-          backgroundColor: '#F5F7FA', // Matches the very light background
-          borderRight: 'none',
-        },
+        '& .MuiDrawer-paper': drawerPaperSx,
       }}
     >
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1A202C' }}>
-            Дом Вкуса
-          </Typography>
-        </Box>
-        <List sx={{ px: 2, flex: 1 }}>
-          {visibleMenuItems.map((item) => (
-            <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
-              <ListItemButton
-                component={NavLink}
-                to={item.path}
-                sx={{
-                  borderRadius: '8px',
-                  color: '#718096',
-                  '&.active': {
-                    backgroundColor: '#CC5E33',
-                    color: '#FFFFFF',
-                    '& .MuiListItemIcon-root': { color: '#FFFFFF' },
-                    '& .MuiListItemText-primary': { color: '#FFFFFF', fontWeight: 500 }
-                  },
-                  '&:hover:not(.active)': {
-                    backgroundColor: 'rgba(204, 94, 51, 0.1)',
-                    color: '#CC5E33',
-                    '& .MuiListItemIcon-root': { color: '#CC5E33' }
-                  }
-                }}
-              >
-                <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
-                  <span className="material-icons" style={{ fontSize: 20 }}>{item.icon}</span>
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: 500 }}
-                />
-                <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
-        <Box sx={{ px: 2, pb: 2 }}>
-          <ListItemButton
-            onClick={logout}
-            aria-label="Выйти"
-            sx={{
-              borderRadius: '8px',
-              color: '#718096',
-              '&:hover': {
-                backgroundColor: 'rgba(204, 94, 51, 0.1)',
-                color: '#CC5E33',
-                '& .MuiListItemIcon-root': { color: '#CC5E33' }
-              }
-            }}
-          >
-            <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
-              <span className="material-icons" style={{ fontSize: 20 }}>logout</span>
-            </ListItemIcon>
-            <ListItemText
-              primary="Выйти"
-              primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: 500 }}
-            />
-          </ListItemButton>
-        </Box>
-      </Box>
+      {drawerContent}
     </Drawer>
   );
 };
