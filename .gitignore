@@ -31,3 +31,6 @@ htmlcov/
 # Misc
 terminals/
 *.log
+
+# Git worktrees (local isolated checkouts)
+.worktrees/
