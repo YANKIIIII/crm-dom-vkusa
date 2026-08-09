@@ -111,6 +111,16 @@ def main():
         content = page.content()
         check('orders list shows mock order 1111', '1111' in content)
 
+        # List multi-select + delete outside order card (manager)
+        row_cb = page.locator('table tbody tr').first.locator('input[type="checkbox"]')
+        row_cb.check()
+        bulk = page.get_by_role('button', name=re.compile(r'Удалить выбранные', re.I))
+        check('manager list shows bulk delete after select', bulk.count() > 0)
+        row_del = page.get_by_role('button', name=re.compile(r'Удалить заказ', re.I))
+        check('manager list has per-row delete control', row_del.count() > 0)
+        # Uncheck so later detail flow is clean
+        row_cb.uncheck()
+
         # Phase B: manager sees delete on non-terminal order (mock #1111)
         page.get_by_text('#1111', exact=True).click()
         page.wait_for_url(lambda url: '/orders/' in url and not url.rstrip('/').endswith('/orders'), timeout=15000)
