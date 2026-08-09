@@ -1,12 +1,32 @@
-import { 
-  Box, Typography, Paper, TextField, Button, Grid, CircularProgress, 
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
-  Checkbox, Select, MenuItem, Avatar, Chip 
+import {
+  Box, Typography, Paper, TextField, Button, Grid, CircularProgress,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Checkbox, Select, MenuItem, Avatar, Chip,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
-import { extractApiError } from '../utils';
+import { extractApiError, formatCurrency } from '../utils';
+
+const GRILL_TYPES = [
+  { value: 'charcoal', label: 'Угольный' },
+  { value: 'gas', label: 'Газовый' },
+  { value: 'ceramic', label: 'Керамический' },
+];
+
+const CLIENT_WRITABLE = [
+  'first_name',
+  'last_name',
+  'middle_name',
+  'email',
+  'birth_date',
+  'address',
+  'grill_type',
+  'discount_percent',
+  'preferred_contact',
+  'acquisition_source',
+  'comment',
+];
 
 const ClientDetail = () => {
   const { id } = useParams();
@@ -14,10 +34,25 @@ const ClientDetail = () => {
   const [client, setClient] = useState(null);
   const [orders, setOrders] = useState([]);
   const [channels, setChannels] = useState([]);
-  
+  const [phones, setPhones] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({});
+  const [newPhone, setNewPhone] = useState('');
+  const [phoneSaving, setPhoneSaving] = useState(false);
+
+  const isNew = id === 'new';
+
+  const loadPhones = async (clientId) => {
+    try {
+      const res = await api.get('/clients/client_phones/', { params: { client: clientId } });
+      setPhones(res.data.results || res.data || []);
+    } catch (err) {
+      console.error('Failed to load phones', err);
+      setPhones([]);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -25,49 +60,98 @@ const ClientDetail = () => {
         const channelsRes = await api.get('/orders/sales_channels/').catch(() => ({ data: [] }));
         setChannels(channelsRes.data.results || channelsRes.data || []);
 
-        if (id !== 'new') {
+        if (!isNew) {
           const [clientRes, ordersRes] = await Promise.all([
             api.get(`/clients/clients/${id}/`),
-            api.get(`/orders/orders/?client=${id}`).catch(() => ({ data: [] }))
+            api.get(`/orders/orders/?client=${id}`).catch(() => ({ data: [] })),
           ]);
           setClient(clientRes.data);
           setFormData(clientRes.data);
           setOrders(ordersRes.data.results || ordersRes.data || []);
+          await loadPhones(id);
         } else {
-          setClient({}); // Empty client
+          setClient({});
+          setFormData({ discount_percent: 0, grill_type: '' });
           setOrders([]);
+          setPhones([]);
         }
       } catch (err) {
-        console.error("Failed to load client details", err);
+        console.error('Failed to load client details', err);
       } finally {
-        if (id === 'new') setClient({});
+        if (isNew) setClient({});
         setLoading(false);
       }
     };
     fetchData();
-  }, [id]);
+  }, [id, isNew]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const buildWritablePayload = () => {
+    const payload = {};
+    for (const field of CLIENT_WRITABLE) {
+      if (formData[field] !== undefined && formData[field] !== '') {
+        payload[field] = formData[field];
+      }
+    }
+    if (formData.discount_percent !== undefined && formData.discount_percent !== '') {
+      payload.discount_percent = formData.discount_percent;
+    }
+    return payload;
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (id === 'new') {
-        const res = await api.post(`/clients/clients/`, formData);
-        alert("Новый клиент создан");
+      if (isNew) {
+        const payload = buildWritablePayload();
+        if (formData.phone) {
+          payload.phone = formData.phone;
+        }
+        if (!payload.first_name) {
+          alert('Укажите имя клиента');
+          return;
+        }
+        const res = await api.post('/clients/clients/', payload);
+        alert('Новый клиент создан');
         navigate(`/clients/${res.data.id}`);
       } else {
-        await api.put(`/clients/clients/${id}/`, formData);
-        alert("Клиент сохранен");
+        const payload = buildWritablePayload();
+        await api.patch(`/clients/clients/${id}/`, payload);
+        alert('Клиент сохранен');
+        const clientRes = await api.get(`/clients/clients/${id}/`);
+        setClient(clientRes.data);
+        setFormData(clientRes.data);
       }
     } catch (err) {
-      console.error("Failed to save client", err);
+      console.error('Failed to save client', err);
       alert(`Ошибка при сохранении клиента:\n${extractApiError(err)}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAddPhone = async () => {
+    if (!newPhone.trim()) {
+      alert('Введите номер телефона');
+      return;
+    }
+    setPhoneSaving(true);
+    try {
+      await api.post('/clients/client_phones/', {
+        client: id,
+        number: newPhone.trim(),
+        is_primary: phones.length === 0,
+      });
+      setNewPhone('');
+      await loadPhones(id);
+    } catch (err) {
+      alert(`Ошибка добавления телефона:\n${extractApiError(err)}`);
+    } finally {
+      setPhoneSaving(false);
     }
   };
 
@@ -83,23 +167,21 @@ const ClientDetail = () => {
     return <Typography>Клиент не найден</Typography>;
   }
 
-  const fullName = `${formData.first_name || ''} ${formData.last_name || ''}`.trim() || 'Новый клиент';
+  const fullName =
+    `${formData.first_name || ''} ${formData.last_name || ''}`.trim() || 'Новый клиент';
 
   return (
     <Box sx={{ maxWidth: 1200, margin: '0 auto', pb: 10 }}>
-      {/* Container simulating the outer white rounded background */}
       <Paper sx={{ p: 4, borderRadius: 4, backgroundColor: '#FFFFFF', boxShadow: 'none' }}>
-        
-        {/* Top Header with Save Button */}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
-          <Button 
-            variant="contained" 
-            sx={{ 
-              backgroundColor: '#CC5E33', 
+          <Button
+            variant="contained"
+            sx={{
+              backgroundColor: '#CC5E33',
               '&:hover': { backgroundColor: '#A84C28' },
               borderRadius: 1,
               textTransform: 'uppercase',
-              px: 3
+              px: 3,
             }}
             onClick={handleSave}
             disabled={saving}
@@ -108,9 +190,8 @@ const ClientDetail = () => {
           </Button>
         </Box>
 
-        {/* Client Info Card */}
         <Box sx={{ border: '1px solid #EDF2F7', borderRadius: 4, p: 4, mb: 4 }}>
-          {id !== 'new' && (
+          {!isNew && (
             <Typography variant="h4" sx={{ mb: 4, fontWeight: 500, color: '#1A202C' }}>
               {fullName}
             </Typography>
@@ -118,64 +199,119 @@ const ClientDetail = () => {
 
           <Grid container spacing={3} sx={{ mb: 3 }}>
             <Grid item xs={12} sm={3}>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1, mb: 0.5, display: 'block' }}>Имя</Typography>
-              <TextField 
-                fullWidth 
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+              >
+                Имя
+              </Typography>
+              <TextField
+                fullWidth
                 size="small"
-                name="first_name" 
-                value={formData.first_name || ''} 
-                onChange={handleInputChange} 
+                name="first_name"
+                value={formData.first_name || ''}
+                onChange={handleInputChange}
               />
             </Grid>
             <Grid item xs={12} sm={3}>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1, mb: 0.5, display: 'block' }}>Фамилия</Typography>
-              <TextField 
-                fullWidth 
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+              >
+                Фамилия
+              </Typography>
+              <TextField
+                fullWidth
                 size="small"
-                name="last_name" 
-                value={formData.last_name || ''} 
-                onChange={handleInputChange} 
+                name="last_name"
+                value={formData.last_name || ''}
+                onChange={handleInputChange}
               />
             </Grid>
             <Grid item xs={12} sm={3}>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1, mb: 0.5, display: 'block' }}>Email</Typography>
-              <TextField 
-                fullWidth 
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+              >
+                Email
+              </Typography>
+              <TextField
+                fullWidth
                 size="small"
-                name="email" 
-                value={formData.email || ''} 
-                onChange={handleInputChange} 
+                name="email"
+                value={formData.email || ''}
+                onChange={handleInputChange}
               />
             </Grid>
+            {isNew && (
+              <Grid item xs={12} sm={3}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ ml: 1, mb: 0.5, display: 'block' }}
+                >
+                  Телефон
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  name="phone"
+                  value={formData.phone || ''}
+                  onChange={handleInputChange}
+                  placeholder="+375..."
+                />
+              </Grid>
+            )}
           </Grid>
 
           <Grid container spacing={3}>
             <Grid item xs={12} sm={4}>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1, mb: 0.5, display: 'block' }}>Дата первого заказа</Typography>
-              <TextField 
-                fullWidth 
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+              >
+                Дата первого заказа
+              </Typography>
+              <TextField
+                fullWidth
                 size="small"
-                type="date" 
-                name="first_purchase_date" 
-                value={formData.first_purchase_date || ''} 
-                onChange={handleInputChange} 
+                type="date"
+                name="first_purchase_date"
+                value={formData.first_purchase_date || ''}
+                disabled
               />
             </Grid>
             <Grid item xs={12} sm={4}>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1, mb: 0.5, display: 'block' }}>Дата крайнего заказа</Typography>
-              <TextField 
-                fullWidth 
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+              >
+                Дата крайнего заказа
+              </Typography>
+              <TextField
+                fullWidth
                 size="small"
-                type="date" 
-                name="last_purchase_date" 
-                value={formData.last_purchase_date || ''} 
-                onChange={handleInputChange} 
+                type="date"
+                name="last_purchase_date"
+                value={formData.last_purchase_date || ''}
+                disabled
               />
             </Grid>
             <Grid item xs={12} sm={4}>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1, mb: 0.5, display: 'block' }}>Канал привлечения</Typography>
-              <Select 
-                fullWidth 
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+              >
+                Канал привлечения
+              </Typography>
+              <Select
+                fullWidth
                 size="small"
                 displayEmpty
                 name="acquisition_source"
@@ -183,52 +319,154 @@ const ClientDetail = () => {
                 onChange={handleInputChange}
                 sx={{ color: formData.acquisition_source ? '#1A202C' : '#718096' }}
               >
-                <MenuItem value="" disabled>Не указан</MenuItem>
-                {channels.map(c => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                <MenuItem value="" disabled>
+                  Не указан
+                </MenuItem>
+                {channels.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.name}
+                  </MenuItem>
                 ))}
               </Select>
             </Grid>
-            
+
             <Grid item xs={12} sm={4}>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1, mb: 0.5, display: 'block' }}>День рождения</Typography>
-              <TextField 
-                fullWidth 
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+              >
+                День рождения
+              </Typography>
+              <TextField
+                fullWidth
                 size="small"
-                type="date" 
-                name="birth_date" 
-                value={formData.birth_date || ''} 
-                onChange={handleInputChange} 
+                type="date"
+                name="birth_date"
+                value={formData.birth_date || ''}
+                onChange={handleInputChange}
               />
             </Grid>
             <Grid item xs={12} sm={4}>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1, mb: 0.5, display: 'block' }}>Скидка</Typography>
-              <TextField 
-                fullWidth 
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+              >
+                Скидка
+              </Typography>
+              <TextField
+                fullWidth
                 size="small"
-                name="discount_percent" 
-                value={formData.discount_percent || 0} 
+                name="discount_percent"
+                value={formData.discount_percent || 0}
                 onChange={handleInputChange}
                 InputProps={{
-                  endAdornment: <Typography sx={{ color: '#718096', ml: 1 }}>%</Typography>
+                  endAdornment: (
+                    <Typography sx={{ color: '#718096', ml: 1 }}>%</Typography>
+                  ),
                 }}
               />
             </Grid>
             <Grid item xs={12} sm={4}>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1, mb: 0.5, display: 'block' }}>Тип гриля</Typography>
-              <TextField 
-                fullWidth 
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+              >
+                Тип гриля
+              </Typography>
+              <Select
+                fullWidth
                 size="small"
-                name="grill_type" 
-                value={formData.grill_type || ''} 
-                onChange={handleInputChange} 
-                placeholder="Например, Газовый"
+                displayEmpty
+                name="grill_type"
+                value={formData.grill_type || ''}
+                onChange={handleInputChange}
+              >
+                <MenuItem value="">Не указан</MenuItem>
+                {GRILL_TYPES.map((g) => (
+                  <MenuItem key={g.value} value={g.value}>
+                    {g.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Grid>
+
+            <Grid item xs={12} sm={4}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+              >
+                Общий бюджет
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                disabled
+                value={
+                  formData.total_budget != null && formData.total_budget !== ''
+                    ? formatCurrency(formData.total_budget)
+                    : formatCurrency(0)
+                }
               />
             </Grid>
           </Grid>
         </Box>
 
-        {/* Order History Section */}
+        {/* Phones */}
+        {!isNew && (
+          <Box sx={{ border: '1px solid #EDF2F7', borderRadius: 4, p: 4, mb: 4 }}>
+            <Typography variant="h5" sx={{ mb: 3, fontWeight: 500, color: '#1A202C' }}>
+              Телефоны
+            </Typography>
+            {phones.length > 0 ? (
+              <TableContainer sx={{ mb: 3 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Номер</TableCell>
+                      <TableCell>Комментарий</TableCell>
+                      <TableCell>Основной</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {phones.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell>{p.number}</TableCell>
+                        <TableCell>{p.comment || '—'}</TableCell>
+                        <TableCell>{p.is_primary ? 'Да' : 'Нет'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Телефоны не добавлены
+              </Typography>
+            )}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', maxWidth: 480 }}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="+375..."
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+              />
+              <Button
+                variant="outlined"
+                disabled={phoneSaving}
+                onClick={handleAddPhone}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                {phoneSaving ? <CircularProgress size={20} /> : 'Добавить'}
+              </Button>
+            </Box>
+          </Box>
+        )}
+
         <Box sx={{ mt: 6 }}>
           <Typography variant="h5" sx={{ mb: 4, fontWeight: 500, color: '#1A202C' }}>
             История заказов
@@ -236,31 +474,26 @@ const ClientDetail = () => {
 
           <Box sx={{ border: '1px solid #EDF2F7', borderRadius: 4, p: 3 }}>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 3 }}>
-              <TextField 
-                placeholder="Поиск" 
-                size="small"
-                sx={{ width: 250 }}
-              />
-              <Select 
-                value="" 
-                displayEmpty 
-                size="small" 
-                sx={{ width: 200, color: '#718096' }}
-              >
+              <TextField placeholder="Поиск" size="small" sx={{ width: 250 }} />
+              <Select value="" displayEmpty size="small" sx={{ width: 200, color: '#718096' }}>
                 <MenuItem value="">Фильтр</MenuItem>
               </Select>
               <Box sx={{ flexGrow: 1 }} />
-              <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }}>
+              <Button
+                variant="outlined"
+                sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }}
+              >
                 ПОИСК
               </Button>
-              <Button 
-                variant="contained" 
-                sx={{ 
-                  backgroundColor: '#CC5E33', 
+              <Button
+                variant="contained"
+                sx={{
+                  backgroundColor: '#CC5E33',
                   '&:hover': { backgroundColor: '#A84C28' },
-                  boxShadow: 'none'
-                }} 
-                onClick={() => navigate('/orders/new')}
+                  boxShadow: 'none',
+                }}
+                disabled={isNew}
+                onClick={() => navigate(`/orders/new?client=${id}`)}
               >
                 НОВАЯ СДЕЛКА +
               </Button>
@@ -270,7 +503,9 @@ const ClientDetail = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell padding="checkbox"><Checkbox size="small" /></TableCell>
+                    <TableCell padding="checkbox">
+                      <Checkbox size="small" />
+                    </TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#4A5568' }}>№ Заказа</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#4A5568' }}>Дата заказа</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#4A5568' }}>Дата доставки</TableCell>
@@ -279,41 +514,68 @@ const ClientDetail = () => {
                     <TableCell sx={{ fontWeight: 600, color: '#4A5568' }}>Канал продажи</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#4A5568' }}>Скидка</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#4A5568' }}>Статус</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#4A5568' }} align="right">Стоимость</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#4A5568' }} align="right">
+                      Стоимость
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {orders.map((row) => (
-                    <TableRow key={row.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/orders/${row.id}`)}>
-                      <TableCell padding="checkbox"><Checkbox size="small" /></TableCell>
+                    <TableRow
+                      key={row.id}
+                      hover
+                      sx={{ cursor: 'pointer' }}
+                      onClick={() => navigate(`/orders/${row.id}`)}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox size="small" />
+                      </TableCell>
                       <TableCell sx={{ color: '#4A5568' }}>#{row.order_number}</TableCell>
                       <TableCell sx={{ color: '#4A5568' }}>{row.order_date}</TableCell>
-                      <TableCell sx={{ color: '#4A5568' }}>{row.completed_at ? row.completed_at.substring(0, 10) : ''}</TableCell>
+                      <TableCell sx={{ color: '#4A5568' }}>
+                        {row.completed_at ? row.completed_at.substring(0, 10) : ''}
+                      </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar sx={{ width: 24, height: 24, fontSize: 10, bgcolor: '#CBD5E0', color: '#1A202C' }}>
-                            {row.seller_name ? row.seller_name.substring(0, 2).toUpperCase() : 'ВА'}
+                          <Avatar
+                            sx={{
+                              width: 24,
+                              height: 24,
+                              fontSize: 10,
+                              bgcolor: '#CBD5E0',
+                              color: '#1A202C',
+                            }}
+                          >
+                            {row.seller_name
+                              ? row.seller_name.substring(0, 2).toUpperCase()
+                              : 'ВА'}
                           </Avatar>
-                          <Typography variant="body2">{row.seller_name || 'Неизвестно'}</Typography>
+                          <Typography variant="body2">
+                            {row.seller_name || 'Неизвестно'}
+                          </Typography>
                         </Box>
                       </TableCell>
-                      <TableCell sx={{ color: '#4A5568' }}>{row.payment_type_name || 'Наличные'}</TableCell>
+                      <TableCell sx={{ color: '#4A5568' }}>
+                        {row.payment_type_name || '—'}
+                      </TableCell>
                       <TableCell sx={{ color: '#4A5568' }}>{row.sales_channel_name}</TableCell>
                       <TableCell sx={{ color: '#4A5568' }}>{row.discount_percent}%</TableCell>
                       <TableCell>
-                        <Chip 
-                          label={row.status_display || 'В доставке'} 
+                        <Chip
+                          label={row.status_display || row.status}
                           size="small"
                           variant="outlined"
-                          sx={{ 
+                          sx={{
                             color: '#DD6B20',
                             borderColor: '#DD6B20',
                             height: 24,
-                            fontSize: '0.75rem'
-                          }} 
+                            fontSize: '0.75rem',
+                          }}
                         />
                       </TableCell>
-                      <TableCell align="right" sx={{ color: '#4A5568', fontWeight: 500 }}>{row.total} BYN</TableCell>
+                      <TableCell align="right" sx={{ color: '#4A5568', fontWeight: 500 }}>
+                        {row.total} BYN
+                      </TableCell>
                     </TableRow>
                   ))}
                   {orders.length === 0 && (
@@ -328,7 +590,6 @@ const ClientDetail = () => {
             </TableContainer>
           </Box>
         </Box>
-
       </Paper>
     </Box>
   );

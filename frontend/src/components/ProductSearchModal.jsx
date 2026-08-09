@@ -178,8 +178,11 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
               ) : (
                 products.map((product) => {
                   const isSelected = selectedIds.includes(product.id);
-                  const priceWithVat = product.rrp ? parseFloat(product.rrp) : parseFloat(product.base_cost_price) * 1.5;
-                  const priceWithoutVat = priceWithVat / 1.2;
+                  // rrp is WITH VAT → show/store ex-VAT; fallback cost markup is already ex-VAT
+                  const priceWithoutVat = product.rrp
+                    ? parseFloat(product.rrp) / 1.2
+                    : parseFloat(product.base_cost_price) * 1.5;
+                  const priceWithVat = priceWithoutVat * 1.2;
 
                   return (
                     <TableRow 
