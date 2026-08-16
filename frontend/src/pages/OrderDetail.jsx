@@ -131,6 +131,8 @@ const OrderDetail = () => {
   const isTerminal = order?.status === 'completed' || order?.status === 'cancelled';
   const isNew = id === 'new';
   const canDeleteOrder = userRole === 'manager' && !isNew && !isTerminal;
+  const clientIdFromUrl = searchParams.get('client');
+  const openProductsFromUrl = searchParams.get('add') === '1';
 
   const isDirty = useMemo(() => {
     if (!order) return false;
@@ -182,7 +184,7 @@ const OrderDetail = () => {
           await refreshOrder();
         } else {
           const initial = emptyNewOrder();
-          const clientId = searchParams.get('client');
+          const clientId = clientIdFromUrl;
           if (clientId) {
             initial.client = Number(clientId) || clientId;
             try {
@@ -211,7 +213,16 @@ const OrderDetail = () => {
       }
     };
     if (id) fetchOrderData();
-  }, [id, isNew, searchParams, refreshOrder]);
+  }, [id, isNew, clientIdFromUrl, refreshOrder]);
+
+  useEffect(() => {
+    if (isNew || !order || !openProductsFromUrl) return undefined;
+    setOpenProductDialog(true);
+    const params = new URLSearchParams(searchParams);
+    params.delete('add');
+    setSearchParams(params, { replace: true });
+    return undefined;
+  }, [isNew, order, openProductsFromUrl, searchParams, setSearchParams]);
 
   const handleChange = (field, value) => {
     setOrder((prev) => ({ ...prev, [field]: value }));
@@ -249,26 +260,30 @@ const OrderDetail = () => {
     handleChange('status', nextStatus);
   };
 
-  const handleSave = async () => {
+  const persistNewOrder = async () => {
     if (!order.order_date) {
       notify('Укажите дату заказа', 'warning');
-      return;
+      return null;
     }
     if (!order.sales_channel) {
       notify('Укажите канал привлечения', 'warning');
-      return;
+      return null;
     }
+    const payload = pickWritable(order);
+    if (!payload.client) delete payload.client;
+    if (!payload.delivery_service) delete payload.delivery_service;
+    const res = await api.post('/orders/orders/', payload);
+    return res.data.id;
+  };
 
+  const handleSave = async () => {
     setSaving(true);
     try {
       if (isNew) {
-        const payload = pickWritable(order);
-        // Do not send order_number; omit empty optional FKs noise
-        if (!payload.client) delete payload.client;
-        if (!payload.delivery_service) delete payload.delivery_service;
-        const res = await api.post('/orders/orders/', payload);
+        const newId = await persistNewOrder();
+        if (!newId) return;
         notify('Новый заказ создан', 'success');
-        navigate(`/orders/${res.data.id}`);
+        navigate(`/orders/${newId}`);
       } else {
         const payload = diffWritable(order, baseline);
         if (Object.keys(payload).length === 0) {
@@ -367,10 +382,6 @@ const OrderDetail = () => {
   };
 
   const handleAddProducts = async (selectedProducts) => {
-    if (isNew) {
-      notify('Сначала сохраните заказ, чтобы добавлять в него товары', 'warning');
-      return;
-    }
     if (isTerminal) {
       notify('Нельзя изменять товары в завершённом или отменённом заказе', 'warning');
       return;
@@ -605,11 +616,14 @@ const OrderDetail = () => {
                 </Grid>
                 <Grid size={4}>
                   <FormControl fullWidth size="small" required>
-                    <InputLabel id="order-sales-channel-label">Канал привлечения</InputLabel>
+                    <InputLabel id="order-sales-channel-label" shrink>
+                      Канал привлечения
+                    </InputLabel>
                     <Select
                       labelId="order-sales-channel-label"
                       id="order-sales-channel"
                       displayEmpty
+                      notched
                       label="Канал привлечения"
                       value={order.sales_channel || ''}
                       onChange={(e) => handleChange('sales_channel', e.target.value)}
@@ -631,10 +645,11 @@ const OrderDetail = () => {
                     size="small"
                     disabled={saving || (!isNew && statusOptions.length <= 1)}
                   >
-                    <InputLabel id="order-status-label">Статус</InputLabel>
+                    <InputLabel id="order-status-label" shrink>Статус</InputLabel>
                     <Select
                       labelId="order-status-label"
                       id="order-status"
+                      notched
                       label="Статус"
                       value={order.status || 'reserved'}
                       onChange={(e) => handleStatusChange(e.target.value)}
@@ -679,11 +694,14 @@ const OrderDetail = () => {
               <Grid container spacing={3}>
                 <Grid size={4}>
                   <FormControl fullWidth size="small">
-                    <InputLabel id="order-delivery-service-label">Способ доставки</InputLabel>
+                    <InputLabel id="order-delivery-service-label" shrink>
+                      Способ доставки
+                    </InputLabel>
                     <Select
                       labelId="order-delivery-service-label"
                       id="order-delivery-service"
                       displayEmpty
+                      notched
                       label="Способ доставки"
                       inputRef={deliverySelectRef}
                       value={order.delivery_service || ''}
@@ -797,8 +815,24 @@ const OrderDetail = () => {
                   variant="outlined"
                   color="secondary"
                   sx={{ textTransform: 'uppercase' }}
-                  disabled={isTerminal || isNew || mutatingItems}
-                  onClick={() => setOpenProductDialog(true)}
+                  disabled={isTerminal || mutatingItems || saving}
+                  onClick={async () => {
+                    if (!isNew) {
+                      setOpenProductDialog(true);
+                      return;
+                    }
+                    setSaving(true);
+                    try {
+                      const newId = await persistNewOrder();
+                      if (!newId) return;
+                      notify('Новый заказ создан', 'success');
+                      navigate(`/orders/${newId}?tab=1&add=1`, { replace: true });
+                    } catch (err) {
+                      notify(`Ошибка при сохранении:\n${extractApiError(err)}`, 'error');
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
                 >
                   ДОБАВИТЬ ТОВАР +
                 </Button>

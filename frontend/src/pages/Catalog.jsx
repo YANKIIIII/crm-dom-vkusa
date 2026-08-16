@@ -264,31 +264,37 @@ const Catalog = () => {
               value={formData.sku}
               onChange={handleInputChange}
             />
-            <FormControl fullWidth required>
-              <InputLabel id="catalog-category-label">Категория</InputLabel>
-              <Select
-                labelId="catalog-category-label"
-                id="catalog-category"
-                name="category"
-                value={formData.category}
-                label="Категория"
-                onChange={handleInputChange}
-              >
+              <FormControl fullWidth required>
+                <InputLabel id="catalog-category-label" shrink>Категория</InputLabel>
+                <Select
+                  labelId="catalog-category-label"
+                  id="catalog-category"
+                  name="category"
+                  displayEmpty
+                  notched
+                  value={formData.category}
+                  label="Категория"
+                  onChange={handleInputChange}
+                >
+                  <MenuItem value="" disabled>Выберите категорию</MenuItem>
                 {categories.map((c) => (
                   <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth required>
-              <InputLabel id="catalog-supplier-label">Поставщик</InputLabel>
-              <Select
-                labelId="catalog-supplier-label"
-                id="catalog-supplier"
-                name="supplier"
-                value={formData.supplier}
-                label="Поставщик"
-                onChange={handleInputChange}
-              >
+              <FormControl fullWidth required>
+                <InputLabel id="catalog-supplier-label" shrink>Поставщик</InputLabel>
+                <Select
+                  labelId="catalog-supplier-label"
+                  id="catalog-supplier"
+                  name="supplier"
+                  displayEmpty
+                  notched
+                  value={formData.supplier}
+                  label="Поставщик"
+                  onChange={handleInputChange}
+                >
+                  <MenuItem value="" disabled>Выберите поставщика</MenuItem>
                 {suppliers.map((s) => (
                   <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
                 ))}

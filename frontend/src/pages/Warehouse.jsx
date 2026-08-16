@@ -300,27 +300,22 @@ const Warehouse = () => {
               getOptionLabel={(option) => option ? `${option.sku || '—'} — ${option.name || ''}` : ''}
               isOptionEqualToValue={(option, value) => option.id === value.id}
               filterOptions={(x) => x}
-              renderInput={(params) => {
-                const { InputProps, ...rest } = params;
-                return (
-                  <TextField
-                    {...rest}
-                    label="Товар"
-                    placeholder="Поиск по артикулу или названию"
-                    slotProps={{
-                      input: {
-                        ...InputProps,
-                        endAdornment: (
-                          <>
-                            {productSearchLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                            {InputProps.endAdornment}
-                          </>
-                        ),
-                      },
-                    }}
-                  />
-                );
-              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Товар"
+                  placeholder="Поиск по артикулу или названию…"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {productSearchLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps?.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
             />
             <TextField
               fullWidth
