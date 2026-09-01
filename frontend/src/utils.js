@@ -18,8 +18,36 @@ export const formatDate = (value) => {
   return dateFormatter.format(date);
 };
 
-// Backend paginates all list endpoints with DRF PAGE_SIZE=20
-export const PAGE_SIZE = 20;
+export const PAGE_SIZE = 25;
+export const PAGE_SIZE_OPTIONS = [25, 50, 100];
+
+export const GRILL_TYPE_LABELS = {
+  charcoal: 'Угольный',
+  gas: 'Газовый',
+  ceramic: 'Керамический',
+  electric: 'Электрический',
+  pellet: 'Пеллетный',
+};
+
+export function toggleOrdering(current, field, defaultDesc = false) {
+  if (current === field) return `-${field}`;
+  if (current === `-${field}`) return field;
+  return defaultDesc ? `-${field}` : field;
+}
+
+export function buildListQuery({ page, pageSize, search, ordering, extra = {} }) {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('page_size', String(pageSize || PAGE_SIZE));
+  if (search) params.set('search', search);
+  if (ordering) params.set('ordering', ordering);
+  Object.entries(extra).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      params.set(key, String(value));
+    }
+  });
+  return params.toString();
+}
 
 // Builds a readable message from a DRF error response:
 // {"detail": "..."}, {"non_field_errors": [...]}, field errors

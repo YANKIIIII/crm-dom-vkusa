@@ -1,4 +1,4 @@
-"""Quick end-to-end process checks via API + Catalog UI create."""
+"""Quick end-to-end process checks via API + Warehouse UI create product."""
 from __future__ import annotations
 
 import re
@@ -177,19 +177,21 @@ def main():
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={'width': 1400, 'height': 900})
         page.goto(f'{UI}/login', wait_until='networkidle')
-        page.get_by_label('Email (Username)').fill('aleksey')
+        page.get_by_label('Логин').fill('aleksey')
         page.get_by_label('Пароль').fill('123')
         page.get_by_role('button', name='Войти').click()
         page.wait_for_url(lambda u: '/login' not in u, timeout=15000)
 
-        page.goto(f'{UI}/catalog', wait_until='networkidle')
+        page.goto(f'{UI}/warehouse', wait_until='networkidle')
         page.get_by_role('button', name=re.compile(r'НОВЫЙ ТОВАР', re.I)).click()
         page.get_by_label('Наименование').fill(f'UI Product {ui_sku}')
         page.get_by_label('Артикул').fill(ui_sku)
 
-        page.locator('#catalog-category').click()
+        page.locator('#warehouse-product-category').click()
         page.locator('[role="listbox"] [role="option"]').first.click()
-        page.locator('#catalog-supplier').click()
+        page.locator('#warehouse-product-supplier').click()
+        page.locator('[role="listbox"] [role="option"]').first.click()
+        page.locator('#warehouse-product-grill').click()
         page.locator('[role="listbox"] [role="option"]').first.click()
 
         page.get_by_label('РРЦ (BYN)').fill('199')

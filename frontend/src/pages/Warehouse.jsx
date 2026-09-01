@@ -1,8 +1,92 @@
-import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Autocomplete, Alert } from '@mui/material';
-import { useEffect, useRef, useState } from 'react';
+import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, TablePagination, IconButton, Tooltip } from '@mui/material';
+import { useEffect, useState } from 'react';
 import api from '../api';
 import { useFeedback } from '../hooks/useFeedback';
-import { extractApiError, PAGE_SIZE } from '../utils';
+import { extractApiError, formatCurrency, PAGE_SIZE, PAGE_SIZE_OPTIONS, toggleOrdering, buildListQuery } from '../utils';
+import SortableHeader from '../components/SortableHeader';
+import SearchableSelect from '../components/SearchableSelect';
+import TruncatedText from '../components/TruncatedText';
+import ProductPreviewTooltip from '../components/ProductPreviewTooltip';
+import ProductCardDialog from '../components/ProductCardDialog';
+
+const EMPTY_PRODUCT_FORM = {
+  name: '',
+  sku: '',
+  category: '',
+  supplier: '',
+  grill_type: '',
+  rrp: '',
+  base_cost_price: '',
+  min_stock: 0,
+  stock_quantity: 0,
+  expiry_date: '',
+};
+
+const productFormFromCard = (product, stockItem) => ({
+  name: product.name || '',
+  sku: product.sku || '',
+  category: product.category || '',
+  supplier: product.supplier || '',
+  grill_type: product.grill_type || '',
+  rrp: product.rrp ?? '',
+  base_cost_price: product.base_cost_price ?? '',
+  min_stock: product.min_stock ?? 0,
+  stock_quantity: stockItem?.stock_quantity ?? 0,
+  expiry_date: stockItem?.expiry_date || '',
+});
+
+const buildProductPayload = (formData, categories) => {
+  const name = formData.name.trim();
+  const sku = formData.sku.trim();
+  const category = formData.category === '' ? null : Number(formData.category);
+  const supplier = formData.supplier === '' ? null : Number(formData.supplier);
+  const baseCost = formData.base_cost_price === '' ? null : Number(formData.base_cost_price);
+  const rrp = formData.rrp === '' ? null : Number(formData.rrp);
+  const minStock = formData.min_stock === '' ? 0 : Number(formData.min_stock);
+  const stockQuantity = formData.stock_quantity === '' ? 0 : Number(formData.stock_quantity);
+  const selectedCat = categories.find((c) => String(c.id) === String(category));
+  const needsExpiry = selectedCat?.code === 'C' || selectedCat?.code === 'D';
+
+  if (!name) return { error: 'Укажите наименование' };
+  if (!sku) return { error: 'Укажите артикул' };
+  if (!category) return { error: 'Выберите категорию' };
+  if (!supplier) return { error: 'Выберите поставщика' };
+  if (baseCost === null || Number.isNaN(baseCost) || baseCost < 0) {
+    return { error: 'Укажите базовую себестоимость (число ≥ 0)' };
+  }
+  if (rrp !== null && (Number.isNaN(rrp) || rrp < 0)) {
+    return { error: 'РРЦ должна быть числом ≥ 0' };
+  }
+  if (Number.isNaN(minStock) || minStock < 0) {
+    return { error: 'Мин. количество должно быть числом ≥ 0' };
+  }
+  if (Number.isNaN(stockQuantity) || stockQuantity < 0) {
+    return { error: 'Остаток должен быть числом ≥ 0' };
+  }
+  if (needsExpiry && !formData.expiry_date) {
+    return { error: 'Укажите срок годности' };
+  }
+  if (selectedCat?.code === 'A' && !formData.grill_type) {
+    return { error: 'Укажите тип гриля' };
+  }
+
+  return {
+    card: {
+      name,
+      sku,
+      category,
+      supplier,
+      grill_type: formData.grill_type || null,
+      base_cost_price: baseCost,
+      rrp,
+      min_stock: minStock,
+    },
+    stock: {
+      stock_quantity: stockQuantity,
+      expiry_date: formData.expiry_date || null,
+    },
+  };
+};
 
 const getTagChipSx = (tag) => {
   if (tag === 'Товар заканчивается') {
@@ -15,63 +99,82 @@ const getTagChipSx = (tag) => {
 };
 
 const Warehouse = () => {
-  const { notify } = useFeedback();
-  const isManager = localStorage.getItem('user_role') === 'manager';
+  const { notify, confirm } = useFeedback();
+  const canWrite = Boolean(localStorage.getItem('user_role'));
   const [stockItems, setStockItems] = useState([]);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const [ordering, setOrdering] = useState('id');
+  const [category, setCategory] = useState('');
+  const [stockTag, setStockTag] = useState('');
+  const [expiryAfter, setExpiryAfter] = useState('');
+  const [expiryBefore, setExpiryBefore] = useState('');
+  const [stockMin, setStockMin] = useState('');
+  const [stockMax, setStockMax] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [openModal, setOpenModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [formError, setFormError] = useState(null);
-  const [stockQuantity, setStockQuantity] = useState(0);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [productOptions, setProductOptions] = useState([]);
-  const [productSearchLoading, setProductSearchLoading] = useState(false);
+  const [productModalMode, setProductModalMode] = useState(null);
+  const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM);
+  const [editingStock, setEditingStock] = useState(null);
+  const [productSaving, setProductSaving] = useState(false);
+  const [productFormError, setProductFormError] = useState(null);
   const [qtyDrafts, setQtyDrafts] = useState({});
   const [savingQtyIds, setSavingQtyIds] = useState(() => new Set());
   const [listVersion, setListVersion] = useState(0);
-  const searchTimerRef = useRef(null);
-  const productSearchSeqRef = useRef(0);
-
-  const loadProductOptions = async (query = '') => {
-    const requestId = ++productSearchSeqRef.current;
-    setProductSearchLoading(true);
-    try {
-      const params = query ? { search: query } : {};
-      const res = await api.get('/catalog/product_cards/', { params });
-      if (requestId !== productSearchSeqRef.current) return;
-      setProductOptions(res.data.results || res.data);
-    } catch (err) {
-      if (requestId !== productSearchSeqRef.current) return;
-      console.error('Failed to load products', err);
-    } finally {
-      if (requestId === productSearchSeqRef.current) {
-        setProductSearchLoading(false);
-      }
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
     const fetchStock = async () => {
       try {
         const response = await api.get(
-          `/warehouse/stock_items/?page=${page + 1}&search=${encodeURIComponent(search)}`
+          `/warehouse/stock_items/?${buildListQuery({
+            page: page + 1,
+            pageSize,
+            search,
+            ordering,
+            extra: {
+              category,
+              stock_tag: stockTag,
+              expiry_after: expiryAfter,
+              expiry_before: expiryBefore,
+              stock_min: stockMin,
+              stock_max: stockMax,
+            },
+          })}`
         );
         if (cancelled) return;
         setStockItems(response.data.results || response.data);
         setTotalCount(response.data.count || 0);
       } catch (err) {
-        if (!cancelled) console.error(err);
+        if (!cancelled) {
+          notify(`Не удалось загрузить склад:\n${extractApiError(err)}`, 'error');
+        }
       }
     };
     fetchStock();
     return () => {
       cancelled = true;
     };
-  }, [page, search, listVersion]);
+  }, [page, pageSize, search, ordering, category, stockTag, expiryAfter, expiryBefore, stockMin, stockMax, listVersion, notify]);
+
+  const reloadSuppliers = async () => {
+    try {
+      const res = await api.get('/catalog/suppliers/', { params: { page_size: 100 } });
+      setSuppliers(res.data.results || res.data || []);
+    } catch {
+      setSuppliers([]);
+    }
+  };
+
+  useEffect(() => {
+    api.get('/catalog/product_categories/')
+      .then((res) => setCategories(res.data.results || res.data || []))
+      .catch(() => setCategories([]));
+    reloadSuppliers();
+  }, []);
 
   const handleSearch = () => {
     setPage(0);
@@ -79,64 +182,78 @@ const Warehouse = () => {
     setListVersion((v) => v + 1);
   };
 
-  useEffect(() => {
-    if (!openModal) return;
-    setSelectedProduct(null);
-    setStockQuantity(0);
-    setFormError(null);
-    let cancelled = false;
-    const requestId = ++productSearchSeqRef.current;
-    setProductSearchLoading(true);
-    api.get('/catalog/product_cards/')
-      .then((res) => {
-        if (cancelled || requestId !== productSearchSeqRef.current) return;
-        setProductOptions(res.data.results || res.data);
-      })
-      .catch((err) => {
-        if (cancelled || requestId !== productSearchSeqRef.current) return;
-        console.error('Failed to load products', err);
-      })
-      .finally(() => {
-        if (!cancelled && requestId === productSearchSeqRef.current) {
-          setProductSearchLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [openModal]);
-
-  useEffect(() => () => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-  }, []);
-
-  const handleProductInputChange = (_event, value, reason) => {
-    if (reason !== 'input') return;
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => {
-      loadProductOptions(value.trim());
-    }, 300);
+  const closeProductModal = () => {
+    if (productSaving) return;
+    setProductModalMode(null);
+    setEditingStock(null);
+    setProductFormError(null);
   };
 
-  const handleCreateStock = async () => {
-    if (!selectedProduct) {
-      setFormError('Выберите товар');
+  const openCreateProduct = () => {
+    setProductForm(EMPTY_PRODUCT_FORM);
+    setEditingStock(null);
+    setProductFormError(null);
+    setProductModalMode('create');
+  };
+
+  const openEditProduct = async (item) => {
+    if (!canWrite || !item?.product_card) return;
+    setProductFormError(null);
+    try {
+      const res = await api.get(`/catalog/product_cards/${item.product_card}/`);
+      setProductForm(productFormFromCard(res.data, item));
+      setEditingStock(item);
+      setProductModalMode('edit');
+    } catch (err) {
+      notify(`Не удалось открыть карточку товара:\n${extractApiError(err)}`, 'error');
+    }
+  };
+
+  const handleSaveProduct = async () => {
+    const built = buildProductPayload(productForm, categories);
+    if (built.error) {
+      setProductFormError(built.error);
       return;
     }
-    setLoading(true);
-    setFormError(null);
+    setProductSaving(true);
+    setProductFormError(null);
     try {
-      await api.post('/warehouse/stock_items/', {
-        product_card: selectedProduct.id,
-        stock_quantity: Number(stockQuantity) || 0,
-      });
-      setOpenModal(false);
+      if (productModalMode === 'edit' && editingStock) {
+        await api.patch(`/catalog/product_cards/${editingStock.product_card}/`, built.card);
+        await api.patch(`/warehouse/stock_items/${editingStock.id}/`, built.stock);
+      } else {
+        const created = await api.post('/catalog/product_cards/', built.card);
+        await api.post('/warehouse/stock_items/', {
+          product_card: created.data.id,
+          ...built.stock,
+        });
+      }
+      setProductModalMode(null);
+      setEditingStock(null);
       setListVersion((v) => v + 1);
     } catch (error) {
-      console.error("Failed to add stock", error);
-      setFormError(`Не удалось добавить приход: ${extractApiError(error)}`);
+      setProductFormError(
+        productModalMode === 'edit'
+          ? `Не удалось сохранить товар: ${extractApiError(error)}`
+          : `Не удалось создать товар: ${extractApiError(error)}`
+      );
     } finally {
-      setLoading(false);
+      setProductSaving(false);
+    }
+  };
+
+  const handleDeleteStock = async (e, item) => {
+    e.stopPropagation();
+    if (!canWrite) return;
+    const label = item.product_name || item.product_sku || `#${item.id}`;
+    if (!(await confirm(`Удалить позицию склада «${label}»? Карточка товара останется.`))) {
+      return;
+    }
+    try {
+      await api.delete(`/warehouse/stock_items/${item.id}/`);
+      setListVersion((v) => v + 1);
+    } catch (error) {
+      notify(`Не удалось удалить позицию:\n${extractApiError(error)}`, 'error');
     }
   };
 
@@ -167,7 +284,6 @@ const Warehouse = () => {
       clearQtyDraftIfUnchanged(item.id, draft);
       setListVersion((v) => v + 1);
     } catch (error) {
-      console.error('Failed to update quantity', error);
       notify(`Не удалось обновить остаток:\n${extractApiError(error)}`, 'error');
     } finally {
       setSavingQtyIds(prev => {
@@ -178,16 +294,34 @@ const Warehouse = () => {
     }
   };
 
+  const dateFilterSx = {
+    width: 150,
+    minWidth: 150,
+    flexShrink: 0,
+    '& input': { color: '#1A202C' },
+    '& input::-webkit-calendar-picker-indicator': { cursor: 'pointer', opacity: 1 },
+  };
+
   return (
     <Box sx={{ maxWidth: 1400, margin: '0 auto' }}>
       <Typography variant="h4" sx={{ mb: 4 }}>Склад (Остатки)</Typography>
       
       <Paper sx={{ p: 0, overflow: 'hidden' }}>
-        <Box sx={{ p: 3, display: 'flex', gap: 2, alignItems: 'center', borderBottom: '1px solid #EDF2F7' }}>
+        <Box
+          sx={{
+            p: 3,
+            display: 'flex',
+            gap: 1.5,
+            alignItems: 'center',
+            flexWrap: 'nowrap',
+            borderBottom: '1px solid #EDF2F7',
+            overflowX: 'auto',
+          }}
+        >
           <TextField
             placeholder="Поиск…"
             size="small"
-            sx={{ width: 350 }}
+            sx={{ minWidth: 160, flex: '1 1 160px' }}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => {
@@ -195,13 +329,77 @@ const Warehouse = () => {
             }}
             slotProps={{ input: { 'aria-label': 'Поиск товаров' } }}
           />
-          <Box sx={{ flexGrow: 1 }} />
-          <Button variant="outlined" sx={{ color: '#1A202C', borderColor: '#E2E8F0', padding: '6px 24px' }} onClick={handleSearch}>
+          <Box sx={{ minWidth: 140, flex: '0 1 160px' }}>
+            <SearchableSelect
+              id="warehouse-category"
+              label="Категория"
+              value={category}
+              onChange={(value) => { setCategory(value); setPage(0); }}
+              options={[
+                { value: '', label: 'Все' },
+                ...categories.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
+          </Box>
+          <Box sx={{ minWidth: 160, flex: '0 1 180px' }}>
+            <SearchableSelect
+              id="warehouse-tag"
+              label="Тег"
+              value={stockTag}
+              onChange={(value) => { setStockTag(value); setPage(0); }}
+              options={[
+                { value: '', label: 'Все' },
+                { value: 'Товар заканчивается', label: 'Товар заканчивается' },
+                { value: 'Нет в наличии', label: 'Нет в наличии' },
+              ]}
+            />
+          </Box>
+          <TextField
+            size="small"
+            type="date"
+            label="Срок с"
+            value={expiryAfter}
+            onChange={(e) => { setExpiryAfter(e.target.value); setPage(0); }}
+            sx={dateFilterSx}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            size="small"
+            type="date"
+            label="Срок по"
+            value={expiryBefore}
+            onChange={(e) => { setExpiryBefore(e.target.value); setPage(0); }}
+            sx={dateFilterSx}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            size="small"
+            type="number"
+            label="Остаток от"
+            value={stockMin}
+            onChange={(e) => { setStockMin(e.target.value); setPage(0); }}
+            sx={{ width: 110, minWidth: 110, flexShrink: 0 }}
+            slotProps={{ htmlInput: { min: 0 } }}
+          />
+          <TextField
+            size="small"
+            type="number"
+            label="Остаток до"
+            value={stockMax}
+            onChange={(e) => { setStockMax(e.target.value); setPage(0); }}
+            sx={{ width: 110, minWidth: 110, flexShrink: 0 }}
+            slotProps={{ htmlInput: { min: 0 } }}
+          />
+          <Button
+            variant="outlined"
+            sx={{ color: '#1A202C', borderColor: '#E2E8F0', px: 3, flexShrink: 0, ml: 'auto' }}
+            onClick={handleSearch}
+          >
             ПОИСК
           </Button>
-          {isManager && (
-            <Button variant="contained" color="primary" onClick={() => setOpenModal(true)}>
-              ПРИХОД ТОВАРА +
+          {canWrite && (
+            <Button variant="contained" color="primary" sx={{ flexShrink: 0 }} onClick={openCreateProduct}>
+              НОВЫЙ ТОВАР +
             </Button>
           )}
         </Box>
@@ -210,23 +408,50 @@ const Warehouse = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Артикул</TableCell>
-                <TableCell>Наименование</TableCell>
-                <TableCell align="right">Остаток (шт)</TableCell>
-                <TableCell>Срок годности</TableCell>
-                <TableCell>Тег</TableCell>
+                <SortableHeader field="product_card__sku" label="Артикул" ordering={ordering} onSort={(field) => { setOrdering(toggleOrdering(ordering, field)); setPage(0); }} />
+                <SortableHeader field="product_card__name" label="Наименование" ordering={ordering} onSort={(field) => { setOrdering(toggleOrdering(ordering, field)); setPage(0); }} />
+                <SortableHeader field="product_card__category__name" label="Категория" ordering={ordering} onSort={(field) => { setOrdering(toggleOrdering(ordering, field)); setPage(0); }} />
+                <SortableHeader field="stock_quantity" label="Остаток" ordering={ordering} onSort={(field) => { setOrdering(toggleOrdering(ordering, field)); setPage(0); }} align="right" />
+                <SortableHeader field="product_card__min_stock" label="Мин. количество" ordering={ordering} onSort={(field) => { setOrdering(toggleOrdering(ordering, field)); setPage(0); }} align="right" />
+                <SortableHeader field="product_card__rrp" label="РРЦ" ordering={ordering} onSort={(field) => { setOrdering(toggleOrdering(ordering, field)); setPage(0); }} align="right" />
+                <SortableHeader field="stock_tag" label="Тег" ordering={ordering} onSort={(field) => { setOrdering(toggleOrdering(ordering, field)); setPage(0); }} />
+                <SortableHeader field="expiry_date" label="Срок годности" ordering={ordering} onSort={(field, desc) => { setOrdering(toggleOrdering(ordering, field, desc)); setPage(0); }} defaultDesc />
+                {canWrite && <TableCell align="right">Действия</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
               {stockItems.map((item) => (
-                <TableRow key={item.id} hover>
-                  <TableCell sx={{ color: '#4A5568', fontWeight: 500 }}>{item.product_sku || '—'}</TableCell>
-                  <TableCell sx={{ color: '#1A202C' }}>{item.product_name || `Товар #${item.product_card}`}</TableCell>
+                <TableRow
+                  key={item.id}
+                  hover
+                  onDoubleClick={() => openEditProduct(item)}
+                  title={canWrite ? 'Двойной клик — карточка товара' : undefined}
+                  sx={{
+                    cursor: canWrite ? 'pointer' : 'default',
+                    bgcolor: item.stock_tag === 'Нет в наличии'
+                      ? '#FED7D7'
+                      : item.stock_tag === 'Товар заканчивается'
+                        ? '#FEFCBF'
+                        : undefined,
+                  }}
+                >
+                  <TableCell sx={{ color: '#4A5568', fontWeight: 500, maxWidth: 140 }}><TruncatedText>{item.product_sku || '—'}</TruncatedText></TableCell>
+                  <TableCell sx={{ color: '#1A202C', maxWidth: 240 }}>
+                    <ProductPreviewTooltip product={{
+                      name: item.product_name,
+                      sku: item.product_sku,
+                      category_name: item.category_name,
+                      rrp: item.rrp,
+                    }}>
+                      <TruncatedText>{item.product_name || `Товар #${item.product_card}`}</TruncatedText>
+                    </ProductPreviewTooltip>
+                  </TableCell>
+                  <TableCell sx={{ color: '#4A5568', maxWidth: 160 }}><TruncatedText>{item.category_name || '—'}</TruncatedText></TableCell>
                   <TableCell align="right" sx={{ 
                     color: item.stock_quantity === 0 ? '#E53E3E' : (item.stock_quantity < 5 ? '#DD6B20' : '#38A169'), 
                     fontWeight: 600 
                   }}>
-                    {isManager ? (
+                    {canWrite ? (
                       <TextField
                         size="small"
                         type="number"
@@ -241,12 +466,16 @@ const Warehouse = () => {
                         disabled={savingQtyIds.has(item.id)}
                         slotProps={{ htmlInput: { min: 0, style: { textAlign: 'right', width: 72 } } }}
                         onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => e.stopPropagation()}
                       />
                     ) : (
                       item.stock_quantity
                     )}
                   </TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{item.expiry_date || '—'}</TableCell>
+                  <TableCell align="right" sx={{ color: '#4A5568' }}>{item.min_stock ?? '—'}</TableCell>
+                  <TableCell align="right" sx={{ color: '#4A5568', fontWeight: 600 }}>
+                    {item.rrp != null && item.rrp !== '' ? formatCurrency(item.rrp) : '—'}
+                  </TableCell>
                   <TableCell>
                     {item.stock_tag ? (
                       <Chip 
@@ -260,11 +489,30 @@ const Warehouse = () => {
                       />
                     ) : '—'}
                   </TableCell>
+                  <TableCell sx={{ color: '#4A5568' }}>{item.expiry_date || '—'}</TableCell>
+                  {canWrite && (
+                    <TableCell align="right" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                      <Tooltip title="Удалить позицию склада">
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            aria-label={`Удалить ${item.product_name || item.product_sku || item.id}`}
+                            onClick={(e) => handleDeleteStock(e, item)}
+                          >
+                            <span className="material-icons" style={{ fontSize: 20 }} aria-hidden="true">
+                              delete
+                            </span>
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {stockItems.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4, color: '#718096' }}>Нет товаров на складе</TableCell>
+                  <TableCell colSpan={canWrite ? 9 : 8} align="center" sx={{ py: 4, color: '#718096' }}>Нет товаров на складе</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -276,63 +524,26 @@ const Warehouse = () => {
           count={totalCount}
           page={page}
           onPageChange={(e, p) => setPage(p)}
-          rowsPerPage={PAGE_SIZE}
-          onRowsPerPageChange={() => {}}
-          rowsPerPageOptions={[PAGE_SIZE]}
+          rowsPerPage={pageSize}
+          onRowsPerPageChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+          rowsPerPageOptions={PAGE_SIZE_OPTIONS}
         />
       </Paper>
 
-      {isManager && (
-        <Dialog open={openModal} onClose={() => setOpenModal(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Приход товара</DialogTitle>
-          <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {formError && (
-              <Alert severity="error" role="alert" aria-live="assertive">
-                {formError}
-              </Alert>
-            )}
-            <Autocomplete
-              options={productOptions}
-              value={selectedProduct}
-              onChange={(_e, value) => setSelectedProduct(value)}
-              onInputChange={handleProductInputChange}
-              loading={productSearchLoading}
-              getOptionLabel={(option) => option ? `${option.sku || '—'} — ${option.name || ''}` : ''}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              filterOptions={(x) => x}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Товар"
-                  placeholder="Поиск по артикулу или названию…"
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {productSearchLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                        {params.InputProps?.endAdornment}
-                      </>
-                    ),
-                  }}
-                />
-              )}
-            />
-            <TextField
-              fullWidth
-              label="Количество"
-              type="number"
-              value={stockQuantity}
-              onChange={(e) => setStockQuantity(e.target.value)}
-              slotProps={{ htmlInput: { min: 0 } }}
-            />
-          </DialogContent>
-          <DialogActions sx={{ p: 2 }}>
-            <Button onClick={() => setOpenModal(false)} color="inherit">Отмена</Button>
-            <Button onClick={handleCreateStock} variant="contained" disabled={loading || !selectedProduct}>
-              {loading ? <CircularProgress size={24} /> : 'Добавить'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+      {canWrite && (
+        <ProductCardDialog
+          open={Boolean(productModalMode)}
+          mode={productModalMode || 'create'}
+          formData={productForm}
+          setFormData={setProductForm}
+          categories={categories}
+          suppliers={suppliers}
+          error={productFormError}
+          loading={productSaving}
+          onClose={closeProductModal}
+          onSubmit={handleSaveProduct}
+          onSuppliersChange={reloadSuppliers}
+        />
       )}
     </Box>
   );

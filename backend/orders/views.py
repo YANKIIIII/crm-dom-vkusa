@@ -6,16 +6,19 @@ from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from common.audit import write_audit
 from common.permissions import IsManagerOrReadOnly
 from clients.services import ClientService
 from warehouse.services import WarehouseService
-from .models import Order, OrderItem, OrderPayment, SalesChannel, PaymentType, DeliveryService
-from .serializers import OrderSerializer, OrderItemSerializer, OrderPaymentSerializer, SalesChannelSerializer, PaymentTypeSerializer, DeliveryServiceSerializer
+from .models import Order, OrderItem, OrderPayment, OrderDelivery, SalesChannel, PaymentType, DeliveryService
+from .serializers import OrderSerializer, OrderItemSerializer, OrderPaymentSerializer, OrderDeliverySerializer, SalesChannelSerializer, PaymentTypeSerializer, DeliveryServiceSerializer
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.select_related(
         'seller', 'sales_channel', 'client', 'delivery_service'
     ).prefetch_related(
+        'client__phones',
+        'deliveries__delivery_service',
         'items__product_card__category', 'items__product_card__supplier', 'payments__payment_type'
     ).order_by('-id')
     serializer_class = OrderSerializer
@@ -25,20 +28,25 @@ class OrderViewSet(viewsets.ModelViewSet):
         'order_number', 'tracking_number', 'client__first_name', 'client__last_name', 'client__email', 'client__phones__number',
         'items__product_card__name', 'items__product_card__sku', 'items__product_card__category__name', 'items__product_card__supplier__name',
     ]
+    ordering_fields = [
+        'id', 'order_number', 'order_date', 'status', 'discount_percent',
+        'seller__first_name', 'client__last_name', 'client__first_name',
+    ]
+    ordering = ['-id']
 
     def get_queryset(self):
-        user = self.request.user
-        qs = super().get_queryset()
-        if hasattr(user, 'role') and user.role == 'seller':
-            qs = qs.filter(seller=user)
-        return qs
+        return super().get_queryset()
 
     def perform_create(self, serializer):
         user = self.request.user
         if hasattr(user, 'role') and user.role == 'seller':
             serializer.save(seller=user, created_by=user)
         else:
-            serializer.save(created_by=user)
+            client = serializer.validated_data.get('client')
+            if client is not None and serializer.validated_data.get('seller') is None:
+                serializer.save(created_by=user, seller=client.seller)
+            else:
+                serializer.save(created_by=user)
 
     @transaction.atomic
     def update(self, request, *args, **kwargs):
@@ -58,13 +66,16 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_update(self, serializer):
-        # Row already locked in update(); keep atomic for signal side-effects.
         user = self.request.user
-        if hasattr(user, 'role') and user.role == 'seller':
-            # Нельзя менять продавца и создателя
-            serializer.save(seller=user)
-        else:
-            serializer.save()
+        if getattr(user, 'role', None) == 'seller':
+            serializer.validated_data.pop('seller', None)
+        old_status = serializer.instance.status
+        instance = serializer.save()
+        if (
+            instance.status == Order.Status.COMPLETED
+            and old_status != Order.Status.COMPLETED
+        ):
+            WarehouseService.deduct_items(instance)
 
     def destroy(self, request, *args, **kwargs):
         if hasattr(request.user, 'role') and request.user.role == 'seller':
@@ -75,10 +86,14 @@ class OrderViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         if instance.status == Order.Status.COMPLETED:
             raise ValidationError("Нельзя удалить завершённый заказ.")
-        # Отменённый заказ уже вернул товар на склад; для активных — снимаем резерв.
-        if instance.status != Order.Status.CANCELLED:
-            WarehouseService.release_items(instance)
+        pk = instance.pk
+        details = {
+            'order_number': instance.order_number,
+            'old': {'status': instance.status},
+            'new': None,
+        }
         instance.delete()
+        write_audit(self.request.user, 'DELETE', 'order', pk, details=details)
 
 def _ensure_order_active(order):
     """Состав терминального заказа неизменяем: отмена уже вернула товар на
@@ -117,44 +132,29 @@ class OrderItemViewSet(viewsets.ModelViewSet):
     search_fields = ['product_card__name', 'product_card__sku', 'product_card__category__name', 'product_card__supplier__name']
 
     def get_queryset(self):
-        user = self.request.user
-        qs = super().get_queryset()
-        if hasattr(user, 'role') and user.role == 'seller':
-            qs = qs.filter(order__seller=user)
-        return qs
+        return super().get_queryset()
 
     @transaction.atomic
     def perform_create(self, serializer):
         order = serializer.validated_data.get('order')
-        if hasattr(self.request.user, 'role') and self.request.user.role == 'seller':
-            if order.seller != self.request.user:
-                raise PermissionDenied("Нельзя добавлять товары в чужой заказ.")
         _ensure_order_active(order)
         item = serializer.save()
-        WarehouseService.reserve_stock_for_item(item)
-        ClientService.process_order_client(item.order)
+        WarehouseService.assert_stock_available(item)
+        ClientService.process_order_client(Order.objects.get(pk=item.order_id))
 
     @transaction.atomic
     def perform_update(self, serializer):
-        order = serializer.validated_data.get('order')
-        if hasattr(self.request.user, 'role') and self.request.user.role == 'seller':
-            if order is not None and order.seller != self.request.user:
-                raise PermissionDenied("Нельзя переносить товары в чужой заказ.")
         item = self.get_object()
         _ensure_order_active(item.order)
+        order = serializer.validated_data.get('order')
         if order is not None:
             _ensure_order_active(order)
-        old_quantity = item.quantity
-        old_product_card = item.product_card
         new_item = serializer.save()
-        WarehouseService.update_stock_for_item_update(
-            new_item, old_product_card, old_quantity
-        )
+        WarehouseService.assert_stock_available(new_item)
 
     @transaction.atomic
     def perform_destroy(self, instance):
         _ensure_order_active(instance.order)
-        WarehouseService.release_stock_for_item(instance)
         instance.delete()
 
 class OrderPaymentViewSet(viewsets.ModelViewSet):
@@ -164,18 +164,11 @@ class OrderPaymentViewSet(viewsets.ModelViewSet):
     filterset_fields = ['order']
 
     def get_queryset(self):
-        user = self.request.user
-        qs = super().get_queryset()
-        if hasattr(user, 'role') and user.role == 'seller':
-            qs = qs.filter(order__seller=user)
-        return qs
+        return super().get_queryset()
 
     @transaction.atomic
     def perform_create(self, serializer):
         order = serializer.validated_data.get('order')
-        if hasattr(self.request.user, 'role') and self.request.user.role == 'seller':
-            if order.seller != self.request.user:
-                raise PermissionDenied("Нельзя добавлять платежи в чужой заказ.")
         locked_order = Order.objects.select_for_update().get(pk=order.pk)
         amount = serializer.validated_data.get('amount')
         _recheck_payment_against_locked_order(locked_order, amount)
@@ -185,9 +178,6 @@ class OrderPaymentViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         payment = serializer.instance
         order = serializer.validated_data.get('order', payment.order)
-        if hasattr(self.request.user, 'role') and self.request.user.role == 'seller':
-            if order.seller != self.request.user:
-                raise PermissionDenied("Нельзя переносить платежи в чужой заказ.")
         locked_order = Order.objects.select_for_update().get(pk=order.pk)
         amount = serializer.validated_data.get('amount', payment.amount)
         _recheck_payment_against_locked_order(
@@ -204,6 +194,47 @@ class OrderPaymentViewSet(viewsets.ModelViewSet):
             )
         instance.delete()
 
+
+def _sync_order_delivery_fields(order):
+    first = order.deliveries.select_related('delivery_service').order_by('id').first()
+    order.delivery_service_id = first.delivery_service_id if first else None
+    order.tracking_number = first.tracking_number if first else ''
+    order.save(update_fields=['delivery_service', 'tracking_number'])
+
+
+class OrderDeliveryViewSet(viewsets.ModelViewSet):
+    queryset = OrderDelivery.objects.select_related('order', 'delivery_service').order_by('id')
+    serializer_class = OrderDeliverySerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['order']
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        order = serializer.validated_data.get('order')
+        locked = Order.objects.select_for_update().get(pk=order.pk)
+        if locked.status in (Order.Status.COMPLETED, Order.Status.CANCELLED):
+            raise ValidationError('Нельзя изменять доставку завершённого или отменённого заказа.')
+        delivery = serializer.save(order=locked)
+        _sync_order_delivery_fields(locked)
+        return delivery
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        locked = Order.objects.select_for_update().get(pk=serializer.instance.order_id)
+        if locked.status in (Order.Status.COMPLETED, Order.Status.CANCELLED):
+            raise ValidationError('Нельзя изменять доставку завершённого или отменённого заказа.')
+        serializer.save()
+        _sync_order_delivery_fields(locked)
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        locked = Order.objects.select_for_update().get(pk=instance.order_id)
+        if locked.status in (Order.Status.COMPLETED, Order.Status.CANCELLED):
+            raise ValidationError('Нельзя изменять доставку завершённого или отменённого заказа.')
+        instance.delete()
+        _sync_order_delivery_fields(locked)
+
+
 class SalesChannelViewSet(viewsets.ModelViewSet):
     queryset = SalesChannel.objects.order_by('id')
     serializer_class = SalesChannelSerializer
@@ -217,4 +248,12 @@ class PaymentTypeViewSet(viewsets.ModelViewSet):
 class DeliveryServiceViewSet(viewsets.ModelViewSet):
     queryset = DeliveryService.objects.order_by('id')
     serializer_class = DeliveryServiceSerializer
-    permission_classes = [IsManagerOrReadOnly]
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        name = (request.data.get('name') or '').strip()
+        if name:
+            existing = DeliveryService.objects.filter(name=name).first()
+            if existing:
+                return Response(self.get_serializer(existing).data)
+        return super().create(request, *args, **kwargs)

@@ -1,7 +1,6 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from .models import Order
-from warehouse.services import WarehouseService
 from clients.services import ClientService
 from django.utils.timezone import now
 
@@ -34,14 +33,18 @@ def order_post_save(sender, instance, created, **kwargs):
                 action='UPDATE',
                 entity_type='order',
                 entity_id=instance.pk,
-                details={'old_status': old_status, 'new_status': instance.status}
+                details={
+                    'old_status': old_status,
+                    'new_status': instance.status,
+                    'old': {'status': old_status},
+                    'new': {'status': instance.status},
+                }
             )
-            if instance.status == 'cancelled':
-                WarehouseService.release_items(instance)
-            elif instance.status == 'completed' and old_status != 'completed':
+            if instance.status == 'completed' and old_status != 'completed':
                 instance.completed_at = now()
-                # Use update so we don't trigger signals again
                 Order.objects.filter(pk=instance.pk).update(completed_at=instance.completed_at)
+                ClientService.update_budget_on_completion(instance)
+            elif instance.status == 'cancelled' and old_status != 'cancelled':
                 ClientService.update_budget_on_completion(instance)
 
 

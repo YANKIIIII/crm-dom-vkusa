@@ -1,6 +1,7 @@
 import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
 import { NavLink } from 'react-router-dom';
 import { logout } from '../../api';
+import { useFeedback } from '../../hooks/useFeedback';
 
 const drawerWidth = 240;
 
@@ -9,7 +10,6 @@ const menuItems = [
   { text: 'Заказы', icon: 'shopping_bag', path: '/orders' },
   { text: 'Клиенты', icon: 'person', path: '/clients' },
   { text: 'Склад', icon: 'inventory_2', path: '/warehouse' },
-  { text: 'Каталог', icon: 'menu_book', path: '/catalog' },
   { text: 'Пользователи', icon: 'group', path: '/users', managerOnly: true },
   { text: 'Журнал', icon: 'history', path: '/audit', managerOnly: true },
 ];
@@ -22,8 +22,16 @@ const drawerPaperSx = {
 };
 
 const Sidebar = ({ mobile = false, mobileOpen = false, onClose }) => {
+  const { confirm } = useFeedback();
   const userRole = localStorage.getItem('user_role');
+  const userName = localStorage.getItem('user_name') || '';
   const visibleMenuItems = menuItems.filter(item => !item.managerOnly || userRole === 'manager');
+  const roleLabel = userRole === 'manager' ? 'Руководитель' : 'Продавец';
+
+  const handleLogout = async () => {
+    if (!(await confirm('Выйти из системы?'))) return;
+    await logout();
+  };
 
   const drawerContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -56,20 +64,28 @@ const Sidebar = ({ mobile = false, mobileOpen = false, onClose }) => {
               }}
             >
               <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
-                <span className="material-icons" style={{ fontSize: 20 }}>{item.icon}</span>
+                <span className="material-icons" style={{ fontSize: 20 }} aria-hidden="true">{item.icon}</span>
               </ListItemIcon>
               <ListItemText
                 primary={item.text}
                 slotProps={{ primary: { sx: { fontSize: '0.9rem', fontWeight: 500 } } }}
               />
-              <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
+              <span className="material-icons" style={{ fontSize: 16 }} aria-hidden="true">chevron_right</span>
             </ListItemButton>
           </ListItem>
         ))}
       </List>
       <Box sx={{ px: 2, pb: 2 }}>
+        <Box sx={{ px: 1.5, pb: 1.5 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, color: '#1A202C' }}>
+            {userName || 'Пользователь'}
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#718096' }}>
+            {roleLabel}
+          </Typography>
+        </Box>
         <ListItemButton
-          onClick={logout}
+          onClick={handleLogout}
           aria-label="Выйти"
           sx={{
             borderRadius: '8px',
@@ -82,7 +98,7 @@ const Sidebar = ({ mobile = false, mobileOpen = false, onClose }) => {
           }}
         >
           <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
-            <span className="material-icons" style={{ fontSize: 20 }}>logout</span>
+            <span className="material-icons" style={{ fontSize: 20 }} aria-hidden="true">logout</span>
           </ListItemIcon>
           <ListItemText
             primary="Выйти"

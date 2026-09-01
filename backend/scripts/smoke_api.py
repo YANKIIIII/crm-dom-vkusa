@@ -70,8 +70,9 @@ def main():
 
     _, stock = req('GET', '/warehouse/stock_items/', token=sel_token, expect=200)
     stock_id = stock['results'][0]['id']
+    qty = stock['results'][0]['stock_quantity']
     req('PATCH', f'/warehouse/stock_items/{stock_id}/', token=sel_token,
-        body={'stock_quantity': 999}, expect=403)
+        body={'stock_quantity': qty}, expect=200)
 
     # reserved -> confirmed for order 1111
     o1111 = next(o for o in orders['results'] if o['order_number'] == 1111)

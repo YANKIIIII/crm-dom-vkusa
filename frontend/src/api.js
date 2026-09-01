@@ -23,12 +23,21 @@ api.interceptors.request.use(
 
 // Endpoints where a 401 must not trigger a refresh attempt
 // (login failure or an invalid/expired refresh token itself).
-const AUTH_URLS = ['/token/', '/token/refresh/'];
+const AUTH_URLS = ['/token/', '/token/refresh/', '/token/logout/'];
 
-const logout = () => {
+const logout = async () => {
+  const refresh = localStorage.getItem('refresh_token');
+  try {
+    if (refresh) {
+      await api.post('/token/logout/', { refresh });
+    }
+  } catch {
+    // Local session is cleared even if the server already rejected the token.
+  }
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
   localStorage.removeItem('user_role');
+  localStorage.removeItem('user_name');
   if (window.location.pathname !== '/login') {
     window.location.href = '/login';
   }

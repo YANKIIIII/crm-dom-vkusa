@@ -1,10 +1,10 @@
 """End-to-end integration test of the full order lifecycle through the REST API.
 
 Covers: order creation by a seller (with server-side forcing of seller/created_by),
-stock reservation on item creation, auto-creation of a client for grill purchases,
-payments, RBAC isolation between sellers, the status state machine up to completion
+stock check on item creation without deduct until completed, grill requires a client,
+payments, shared order visibility, the status state machine up to completion
 (completed_at + client budget update), manager analytics, audit logging, and the
-cancellation branch that releases reserved stock.
+cancellation branch that does not change stock before sale.
 """
 import pytest
 from decimal import Decimal
@@ -12,6 +12,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from orders.models import Order, SalesChannel, PaymentType
 from catalog.models import ProductCard, ProductCategory, Supplier
+from clients.models import Client
 from warehouse.models import StockItem
 from users.models import User
 
@@ -52,6 +53,7 @@ def test_full_order_lifecycle():
     stock = StockItem.objects.create(product_card=product, stock_quantity=10)
     channel = SalesChannel.objects.create(name='Integration Channel')
     payment_type = PaymentType.objects.create(name='Integration Card')
+    grill_client = Client.objects.create(first_name='Иван', last_name='Гриль', seller=seller1)
 
     api1 = _client_for(seller1)
     api2 = _client_for(seller2)
@@ -65,6 +67,7 @@ def test_full_order_lifecycle():
         'order_date': timezone.now().date().isoformat(),
         'sales_channel': channel.pk,
         'seller': seller2.pk,  # must be ignored / overridden
+        'client': grill_client.pk,
     })
     assert response.status_code == 201, response.data
     order_id = response.data['id']
@@ -72,7 +75,7 @@ def test_full_order_lifecycle():
     assert response.data['created_by'] == seller1.pk
     assert response.data['status'] == Order.Status.RESERVED
 
-    # ---------- 3. Seller1 adds a grill item: stock reserved, client auto-created ----------
+    # ---------- 3. Seller1 adds a grill item: stock unchanged until completed ----------
     response = api1.post(ORDER_ITEMS_URL, {
         'order': order_id,
         'product_card': product.pk,
@@ -84,15 +87,11 @@ def test_full_order_lifecycle():
     assert response.status_code == 201, response.data
 
     stock.refresh_from_db()
-    assert stock.stock_quantity == 8
+    assert stock.stock_quantity == 10
 
     order = Order.objects.get(pk=order_id)
-    auto_client = order.client
-    assert auto_client is not None
-    assert auto_client.first_name == 'Новый Клиент (Заказ #7001)'
-    assert auto_client.seller == seller1
-    assert auto_client.purchase_category == 'A'
-    assert auto_client.total_budget == Decimal('0.00')
+    assert order.client_id == grill_client.pk
+    assert grill_client.total_budget == Decimal('0.00')
 
     # ---------- 4. Seller1 registers a payment ----------
     response = api1.post(ORDER_PAYMENTS_URL, {
@@ -102,13 +101,13 @@ def test_full_order_lifecycle():
     })
     assert response.status_code == 201, response.data
 
-    # ---------- 5. Seller2 must not see seller1's order ----------
+    # ---------- 5. Seller2 can see and open seller1's order ----------
     response = api2.get(ORDERS_URL)
     assert response.status_code == 200
-    assert order_id not in [row['id'] for row in response.data['results']]
+    assert order_id in [row['id'] for row in response.data['results']]
 
     response = api2.get(f'{ORDERS_URL}{order_id}/')
-    assert response.status_code == 404
+    assert response.status_code == 200
 
     # ---------- 6. Walk the status state machine to completion ----------
     for new_status in ('confirmed', 'in_delivery', 'completed'):
@@ -126,10 +125,12 @@ def test_full_order_lifecycle():
     # ---------- 7. Completion side effects ----------
     assert order.completed_at is not None
 
-    auto_client.refresh_from_db()
+    grill_client.refresh_from_db()
     # total_budget = price * (1 + vat/100) * qty * (1 - discount/100)
     #              = 150 * 1.20 * 2 * 1.00 = 360.00
-    assert auto_client.total_budget == Decimal('360.00')
+    assert grill_client.total_budget == Decimal('360.00')
+    stock.refresh_from_db()
+    assert stock.stock_quantity == 8
 
     # ---------- 8. Manager checks analytics ----------
     response = api_manager.get(ANALYTICS_URL)
@@ -157,12 +158,13 @@ def test_full_order_lifecycle():
         ('in_delivery', 'completed'),
     }
 
-    # ---------- 10. Cancellation branch releases reserved stock ----------
+    # ---------- 10. Cancellation before sale does not change stock ----------
     response = api1.post(ORDERS_URL, {
         'order_number': 7002,
         'order_date': timezone.now().date().isoformat(),
         'sales_channel': channel.pk,
         'seller': seller1.pk,
+        'client': grill_client.pk,
     })
     assert response.status_code == 201, response.data
     order2_id = response.data['id']
@@ -177,7 +179,7 @@ def test_full_order_lifecycle():
     })
     assert response.status_code == 201, response.data
     stock.refresh_from_db()
-    assert stock.stock_quantity == 5
+    assert stock.stock_quantity == 8
 
     response = api1.patch(f'{ORDERS_URL}{order2_id}/', {'status': 'cancelled'})
     assert response.status_code == 200, response.data

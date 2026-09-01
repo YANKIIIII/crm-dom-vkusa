@@ -85,15 +85,19 @@ def test_cancelled_same_status_save_allowed(api_env):
 
 
 @pytest.mark.django_db
-def test_reserved_to_completed_rejected(api_env):
+def test_reserved_can_jump_to_in_delivery_or_completed(api_env):
     api, user, channel = api_env
-    order = _make_order(user, channel, 9005, Order.Status.RESERVED)
+    to_delivery = _make_order(user, channel, 9005, Order.Status.RESERVED)
+    response = api.patch(f'{ORDERS_URL}{to_delivery.pk}/', {'status': 'in_delivery'})
+    assert response.status_code == 200, response.data
+    to_delivery.refresh_from_db()
+    assert to_delivery.status == Order.Status.IN_DELIVERY
 
-    response = api.patch(f'{ORDERS_URL}{order.pk}/', {'status': 'completed'})
-
-    assert response.status_code == 400
-    order.refresh_from_db()
-    assert order.status == Order.Status.RESERVED
+    to_done = _make_order(user, channel, 9007, Order.Status.RESERVED)
+    response = api.patch(f'{ORDERS_URL}{to_done.pk}/', {'status': 'completed'})
+    assert response.status_code == 200, response.data
+    to_done.refresh_from_db()
+    assert to_done.status == Order.Status.COMPLETED
 
 
 @pytest.mark.django_db

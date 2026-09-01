@@ -30,11 +30,13 @@ const Login = () => {
         }
         role = role || 'seller';
         localStorage.setItem('user_role', role);
-      } catch (e) {
-        console.error('Failed to fetch user role', e);
+        const displayName = `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.username || username;
+        localStorage.setItem('user_name', displayName);
+      } catch {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_role');
+        localStorage.removeItem('user_name');
         setError('Не удалось загрузить профиль. Попробуйте ещё раз.');
         return;
       }
@@ -64,7 +66,7 @@ const Login = () => {
         <TextField 
           id="login-username"
           fullWidth 
-          label="Email (Username)" 
+          label="Логин" 
           variant="outlined" 
           value={username}
           onChange={(e) => setUsername(e.target.value)}

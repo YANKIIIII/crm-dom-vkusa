@@ -1,4 +1,5 @@
 import { createTheme } from '@mui/material/styles';
+import { ruRU } from '@mui/material/locale';
 
 const theme = createTheme({
   palette: {
@@ -78,7 +79,34 @@ const theme = createTheme({
           '& .MuiOutlinedInput-notchedOutline': {
             borderColor: '#E2E8F0',
           },
+          '& input[type="date"]': {
+            color: '#1A202C',
+            colorScheme: 'light',
+          },
+          '& input[type="date"]::-webkit-datetime-edit': {
+            minWidth: '8rem',
+            padding: 0,
+          },
+          '& input[type="date"]::-webkit-datetime-edit-fields-wrapper': {
+            padding: 0,
+          },
+          '& input[type="date"]::-webkit-calendar-picker-indicator': {
+            cursor: 'pointer',
+            opacity: 1,
+          },
         },
+      },
+    },
+    MuiTableContainer: {
+      styleOverrides: {
+        root: {
+          overflowX: 'auto',
+        },
+      },
+    },
+    MuiTablePagination: {
+      defaultProps: {
+        rowsPerPageOptions: [25, 50, 100],
       },
     },
     MuiTableCell: {
@@ -94,6 +122,6 @@ const theme = createTheme({
       }
     }
   },
-});
+}, ruRU);
 
 export default theme;

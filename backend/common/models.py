@@ -3,7 +3,8 @@ from users.models import User
 
 class AuditLog(models.Model):
     user = models.ForeignKey(
-        User, on_delete=models.RESTRICT, related_name='audit_logs', verbose_name='Пользователь'
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='audit_logs', verbose_name='Пользователь'
     )
     action = models.CharField(
         max_length=50, verbose_name='Действие'

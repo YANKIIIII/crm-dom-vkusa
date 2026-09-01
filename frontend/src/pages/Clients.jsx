@@ -4,10 +4,15 @@ import {
   IconButton, Tooltip, CircularProgress,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { useFeedback } from '../hooks/useFeedback';
-import { PAGE_SIZE, formatCurrency, formatDate, extractApiError } from '../utils';
+import {
+  PAGE_SIZE, PAGE_SIZE_OPTIONS, formatCurrency, formatDate, extractApiError,
+  toggleOrdering, buildListQuery,
+} from '../utils';
+import SortableHeader from '../components/SortableHeader';
+import TruncatedText from '../components/TruncatedText';
 
 const Clients = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -16,7 +21,15 @@ const Clients = () => {
   const isManager = localStorage.getItem('user_role') === 'manager';
 
   const urlSearch = searchParams.get('search') ?? '';
+  const urlOrdering = searchParams.get('ordering') || '-id';
   const urlPage1Based = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+  const urlPageSize = PAGE_SIZE_OPTIONS.includes(Number(searchParams.get('page_size')))
+    ? Number(searchParams.get('page_size'))
+    : PAGE_SIZE;
+  const urlDiscountMin = searchParams.get('discount_min') ?? '';
+  const urlDiscountMax = searchParams.get('discount_max') ?? '';
+  const urlPurchaseAfter = searchParams.get('last_purchase_after') ?? '';
+  const urlPurchaseBefore = searchParams.get('last_purchase_before') ?? '';
   const page = urlPage1Based - 1;
 
   const [searchInput, setSearchInput] = useState(urlSearch);
@@ -36,14 +49,27 @@ const Clients = () => {
       setLoading(true);
       try {
         const response = await api.get(
-          `/clients/clients/?page=${urlPage1Based}&search=${encodeURIComponent(urlSearch)}`
+          `/clients/clients/?${buildListQuery({
+            page: urlPage1Based,
+            pageSize: urlPageSize,
+            search: urlSearch,
+            ordering: urlOrdering,
+            extra: {
+              discount_min: urlDiscountMin,
+              discount_max: urlDiscountMax,
+              last_purchase_after: urlPurchaseAfter,
+              last_purchase_before: urlPurchaseBefore,
+            },
+          })}`
         );
         if (cancelled) return;
         setClients(response.data.results || response.data);
         setTotalCount(response.data.count || 0);
         setSelectedIds(new Set());
       } catch (error) {
-        if (!cancelled) console.error('Failed to fetch clients:', error);
+        if (!cancelled) {
+          notify(`Не удалось загрузить клиентов:\n${extractApiError(error)}`, 'error');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -52,22 +78,44 @@ const Clients = () => {
     return () => {
       cancelled = true;
     };
-  }, [urlSearch, urlPage1Based]);
+  }, [urlSearch, urlPage1Based, urlPageSize, urlOrdering, urlDiscountMin, urlDiscountMax, urlPurchaseAfter, urlPurchaseBefore, notify]);
 
-  const updateUrl = (nextSearch, nextPage0Based) => {
+  const updateUrl = (next) => {
     const params = new URLSearchParams();
-    params.set('search', nextSearch);
-    params.set('page', String(nextPage0Based + 1));
+    params.set('search', next.search ?? urlSearch);
+    params.set('page', String((next.page0Based ?? page) + 1));
+    params.set('page_size', String(next.pageSize ?? urlPageSize));
+    params.set('ordering', next.ordering ?? urlOrdering);
+    const discountMin = next.discountMin === undefined ? urlDiscountMin : next.discountMin;
+    const discountMax = next.discountMax === undefined ? urlDiscountMax : next.discountMax;
+    const purchaseAfter = next.purchaseAfter === undefined ? urlPurchaseAfter : next.purchaseAfter;
+    const purchaseBefore = next.purchaseBefore === undefined ? urlPurchaseBefore : next.purchaseBefore;
+    if (discountMin) params.set('discount_min', discountMin);
+    if (discountMax) params.set('discount_max', discountMax);
+    if (purchaseAfter) params.set('last_purchase_after', purchaseAfter);
+    if (purchaseBefore) params.set('last_purchase_before', purchaseBefore);
     setSearchParams(params);
   };
 
   const handleSearch = () => {
-    updateUrl(searchInput, 0);
+    updateUrl({ search: searchInput, page0Based: 0 });
   };
 
   const handlePageChange = (e, newPage) => {
     setSearchInput(urlSearch);
-    updateUrl(urlSearch, newPage);
+    updateUrl({ search: urlSearch, page0Based: newPage });
+  };
+
+  const handlePageSizeChange = (e) => {
+    updateUrl({ search: urlSearch, page0Based: 0, pageSize: Number(e.target.value) });
+  };
+
+  const handleSort = (field, defaultDesc) => {
+    updateUrl({
+      search: urlSearch,
+      page0Based: 0,
+      ordering: toggleOrdering(urlOrdering, field, defaultDesc),
+    });
   };
 
   const pageIds = useMemo(() => clients.map((c) => c.id), [clients]);
@@ -112,7 +160,18 @@ const Clients = () => {
         }
       }
       const response = await api.get(
-        `/clients/clients/?page=${urlPage1Based}&search=${encodeURIComponent(urlSearch)}`
+        `/clients/clients/?${buildListQuery({
+          page: urlPage1Based,
+          pageSize: urlPageSize,
+          search: urlSearch,
+          ordering: urlOrdering,
+          extra: {
+            discount_min: urlDiscountMin,
+            discount_max: urlDiscountMax,
+            last_purchase_after: urlPurchaseAfter,
+            last_purchase_before: urlPurchaseBefore,
+          },
+        })}`
       );
       setClients(response.data.results || response.data);
       setTotalCount(response.data.count || 0);
@@ -136,22 +195,58 @@ const Clients = () => {
     deleteClientsByIds([client.id]);
   };
 
-  const colCount = isManager ? 10 : 9;
+  const colCount = isManager ? 11 : 10;
 
   return (
     <Box sx={{ maxWidth: 1400, margin: '0 auto' }}>
       <Typography variant="h4" sx={{ mb: 4 }}>Клиенты</Typography>
 
       <Paper sx={{ p: 0, overflow: 'hidden' }}>
-        <Box sx={{ p: 3, display: 'flex', gap: 2, alignItems: 'center', borderBottom: '1px solid #EDF2F7' }}>
+        <Box sx={{ p: 3, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid #EDF2F7' }}>
           <TextField
             placeholder="Поиск…"
             size="small"
-            sx={{ width: 300 }}
+            sx={{ width: 240 }}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             slotProps={{ input: { 'aria-label': 'Поиск клиентов' } }}
+          />
+          <TextField
+            size="small"
+            type="number"
+            label="Скидка от"
+            sx={{ width: 110 }}
+            value={urlDiscountMin}
+            onChange={(e) => updateUrl({ search: urlSearch, page0Based: 0, discountMin: e.target.value })}
+            slotProps={{ htmlInput: { min: 0, max: 100 } }}
+          />
+          <TextField
+            size="small"
+            type="number"
+            label="Скидка до"
+            sx={{ width: 110 }}
+            value={urlDiscountMax}
+            onChange={(e) => updateUrl({ search: urlSearch, page0Based: 0, discountMax: e.target.value })}
+            slotProps={{ htmlInput: { min: 0, max: 100 } }}
+          />
+          <TextField
+            size="small"
+            type="date"
+            label="Покупка с"
+            value={urlPurchaseAfter}
+            onChange={(e) => updateUrl({ search: urlSearch, page0Based: 0, purchaseAfter: e.target.value })}
+            sx={{ width: 170, minWidth: 170, flexShrink: 0 }}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            size="small"
+            type="date"
+            label="Покупка по"
+            value={urlPurchaseBefore}
+            onChange={(e) => updateUrl({ search: urlSearch, page0Based: 0, purchaseBefore: e.target.value })}
+            sx={{ width: 170, minWidth: 170, flexShrink: 0 }}
+            slotProps={{ inputLabel: { shrink: true } }}
           />
           <Box sx={{ flexGrow: 1 }} />
           {isManager && selectedIds.size > 0 && (
@@ -180,7 +275,7 @@ const Clients = () => {
           </Button>
         </Box>
 
-        <TableContainer>
+        <TableContainer sx={{ overflowX: 'auto' }}>
           <Table>
             <TableHead>
               <TableRow>
@@ -193,14 +288,15 @@ const Clients = () => {
                     slotProps={{ input: { 'aria-label': 'Выбрать всех клиентов на странице' } }}
                   />
                 </TableCell>
-                <TableCell>ФИО</TableCell>
+                <SortableHeader field="last_name" label="ФИО" ordering={urlOrdering} onSort={handleSort} />
                 <TableCell>Телефон</TableCell>
-                <TableCell>Скидка</TableCell>
+                <SortableHeader field="email" label="Email" ordering={urlOrdering} onSort={handleSort} />
+                <SortableHeader field="discount_percent" label="Скидка" ordering={urlOrdering} onSort={handleSort} />
                 <TableCell>Канал продажи</TableCell>
                 <TableCell>Тип гриля</TableCell>
-                <TableCell>Первый заказ</TableCell>
-                <TableCell>Крайний заказ</TableCell>
-                <TableCell align="right">Бюджет</TableCell>
+                <SortableHeader field="first_purchase_date" label="Первый заказ" ordering={urlOrdering} onSort={handleSort} defaultDesc />
+                <SortableHeader field="last_purchase_date" label="Крайний заказ" ordering={urlOrdering} onSort={handleSort} defaultDesc />
+                <SortableHeader field="total_budget" label="Бюджет" ordering={urlOrdering} onSort={handleSort} align="right" defaultDesc />
                 {isManager && <TableCell align="right">Действия</TableCell>}
               </TableRow>
             </TableHead>
@@ -237,20 +333,32 @@ const Clients = () => {
                           slotProps={{ input: { 'aria-label': `Выбрать клиента ${name || row.id}` } }}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ color: '#4A5568' }} onClick={(e) => e.stopPropagation()}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                           <Avatar sx={{ width: 28, height: 28, fontSize: 11, bgcolor: '#CBD5E0', color: '#1A202C' }}>
                             {row.first_name ? row.first_name.charAt(0) : ''}
                             {row.last_name ? row.last_name.charAt(0) : ''}
                           </Avatar>
-                          <Typography variant="body2" sx={{ color: '#4A5568' }}>
-                            {row.first_name} {row.last_name}
-                          </Typography>
+                          <Box
+                            component={RouterLink}
+                            to={`/clients/${row.id}`}
+                            aria-label={`Открыть клиента ${name || row.id}`}
+                            sx={{
+                              color: 'inherit',
+                              textDecoration: 'none',
+                              fontWeight: 500,
+                              maxWidth: 220,
+                              '&:hover': { textDecoration: 'underline' },
+                            }}
+                          >
+                            <TruncatedText>{name}</TruncatedText>
+                          </Box>
                         </Box>
                       </TableCell>
                       <TableCell sx={{ color: '#4A5568' }}>{row.primary_phone || '—'}</TableCell>
+                      <TableCell sx={{ color: '#4A5568', maxWidth: 180 }}><TruncatedText>{row.email || '—'}</TruncatedText></TableCell>
                       <TableCell sx={{ color: '#4A5568' }}>{row.discount_percent}%</TableCell>
-                      <TableCell sx={{ color: '#4A5568' }}>{row.acquisition_source || '—'}</TableCell>
+                      <TableCell sx={{ color: '#4A5568', maxWidth: 160 }}><TruncatedText>{row.acquisition_source || '—'}</TruncatedText></TableCell>
                       <TableCell>
                         {row.grill_type_display ? (
                           <Box
@@ -290,7 +398,7 @@ const Clients = () => {
                                 disabled={deleting}
                                 onClick={(e) => handleDeleteOne(e, row)}
                               >
-                                <span className="material-icons" style={{ fontSize: 20 }}>
+                                <span className="material-icons" style={{ fontSize: 20 }} aria-hidden="true">
                                   delete
                                 </span>
                               </IconButton>
@@ -311,9 +419,9 @@ const Clients = () => {
           count={totalCount}
           page={page}
           onPageChange={handlePageChange}
-          rowsPerPage={PAGE_SIZE}
-          onRowsPerPageChange={() => {}}
-          rowsPerPageOptions={[PAGE_SIZE]}
+          rowsPerPage={urlPageSize}
+          onRowsPerPageChange={handlePageSizeChange}
+          rowsPerPageOptions={PAGE_SIZE_OPTIONS}
         />
       </Paper>
     </Box>

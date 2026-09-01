@@ -35,10 +35,11 @@ class Order(models.Model):
         max_length=20, choices=Status.choices, default=Status.RESERVED, verbose_name='Статус'
     )
     seller = models.ForeignKey(
-        User, on_delete=models.RESTRICT, related_name='orders_as_seller', verbose_name='Продавец'
+        User, on_delete=models.RESTRICT, related_name='orders_as_seller',
+        null=True, blank=True, verbose_name='Продавец'
     )
     sales_channel = models.ForeignKey(
-        SalesChannel, on_delete=models.RESTRICT, verbose_name='Канал продаж'
+        SalesChannel, on_delete=models.RESTRICT, null=True, blank=True, verbose_name='Канал продаж'
     )
     client = models.ForeignKey(
         Client, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders', verbose_name='Клиент'
@@ -93,12 +94,19 @@ class Order(models.Model):
             models.Index(fields=['status'], name='idx_orders_status'),
         ]
 
-# Допустимые переходы статусов заказа: терминальные статусы (completed, cancelled)
-# не допускают изменений, повторное сохранение того же статуса разрешено всегда.
+# Из активного заказа можно поставить любой статус. Завершённый и отменённый
+# уже нельзя сменить; повторное сохранение того же статуса разрешено всегда.
+_ACTIVE_STATUSES = (
+    Order.Status.RESERVED,
+    Order.Status.CONFIRMED,
+    Order.Status.IN_DELIVERY,
+    Order.Status.COMPLETED,
+    Order.Status.CANCELLED,
+)
 ALLOWED_STATUS_TRANSITIONS = {
-    Order.Status.RESERVED: (Order.Status.CONFIRMED, Order.Status.CANCELLED),
-    Order.Status.CONFIRMED: (Order.Status.IN_DELIVERY, Order.Status.COMPLETED, Order.Status.CANCELLED),
-    Order.Status.IN_DELIVERY: (Order.Status.COMPLETED, Order.Status.CANCELLED),
+    Order.Status.RESERVED: _ACTIVE_STATUSES,
+    Order.Status.CONFIRMED: _ACTIVE_STATUSES,
+    Order.Status.IN_DELIVERY: _ACTIVE_STATUSES,
     Order.Status.COMPLETED: (),
     Order.Status.CANCELLED: (),
 }
@@ -139,4 +147,18 @@ class OrderPayment(models.Model):
 
     class Meta:
         db_table = 'order_payments'
+
+
+class OrderDelivery(models.Model):
+    order = models.ForeignKey(
+        Order, on_delete=models.CASCADE, related_name='deliveries', verbose_name='Заказ'
+    )
+    delivery_service = models.ForeignKey(
+        DeliveryService, on_delete=models.RESTRICT, verbose_name='Служба доставки'
+    )
+    tracking_number = models.CharField(max_length=100, blank=True, verbose_name='Трек-номер')
+    delivery_date = models.DateField(null=True, blank=True, verbose_name='Дата доставки')
+
+    class Meta:
+        db_table = 'order_deliveries'
 

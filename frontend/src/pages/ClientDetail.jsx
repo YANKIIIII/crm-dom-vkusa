@@ -1,19 +1,19 @@
 import {
+  Autocomplete,
   Box, Typography, Paper, TextField, Button, Grid, CircularProgress,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Checkbox, Select, MenuItem, Avatar, Chip,
+  Avatar, Chip, Checkbox, IconButton, Tooltip,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link as RouterLink, useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
-import { extractApiError, formatCurrency } from '../utils';
+import { extractApiError, formatCurrency, formatDate, GRILL_TYPE_LABELS } from '../utils';
 import { useFeedback } from '../hooks/useFeedback';
+import SearchableSelect from '../components/SearchableSelect';
 
-const GRILL_TYPES = [
-  { value: 'charcoal', label: 'Угольный' },
-  { value: 'gas', label: 'Газовый' },
-  { value: 'ceramic', label: 'Керамический' },
-];
+const GRILL_TYPES = Object.entries(GRILL_TYPE_LABELS).map(([value, label]) => ({ value, label }));
+
+const PHONE_COMMENT_OPTIONS = ['рабочий', 'домашний', 'мобильный', 'WhatsApp', 'Telegram', 'Viber'];
 
 const CLIENT_WRITABLE = [
   'first_name',
@@ -29,10 +29,69 @@ const CLIENT_WRITABLE = [
   'comment',
 ];
 
+const dateFieldSx = {
+  '& input::-webkit-calendar-picker-indicator': { cursor: 'pointer', opacity: 1 },
+};
+
+const fieldSize = { xs: 12, md: 4 };
+
+const resolveAcquisition = (value, channelList) => {
+  const raw = value || '';
+  if (!raw) return '';
+  const byName = channelList.find((c) => c.name === raw);
+  if (byName) return byName.name;
+  const byId = channelList.find((c) => String(c.id) === String(raw));
+  return byId ? byId.name : raw;
+};
+
+const PhoneCommentField = ({
+  id,
+  value,
+  onCommit,
+  disabled = false,
+  placeholder = 'Например: рабочий',
+  label,
+}) => {
+  const [draft, setDraft] = useState(value || '');
+
+  useEffect(() => {
+    setDraft(value || '');
+  }, [value]);
+
+  const commit = (next) => {
+    const normalized = next ?? '';
+    setDraft(normalized);
+    if (normalized !== (value || '')) {
+      onCommit(normalized);
+    }
+  };
+
+  return (
+    <Autocomplete
+      id={id}
+      freeSolo
+      fullWidth
+      size="small"
+      disabled={disabled}
+      options={PHONE_COMMENT_OPTIONS}
+      value={draft}
+      onChange={(_event, next) => commit(typeof next === 'string' ? next : next || '')}
+      onInputChange={(_event, next, reason) => {
+        if (reason === 'input') setDraft(next);
+      }}
+      onBlur={() => commit(draft)}
+      slotProps={{ popper: { sx: { zIndex: 2000 } } }}
+      renderInput={(params) => (
+        <TextField {...params} label={label} placeholder={placeholder} />
+      )}
+    />
+  );
+};
+
 const ClientDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const [client, setClient] = useState(null);
   const [orders, setOrders] = useState([]);
   const [channels, setChannels] = useState([]);
@@ -41,51 +100,57 @@ const ClientDetail = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({});
-  const [newPhone, setNewPhone] = useState('');
+  const [newPhone, setNewPhone] = useState({ number: '', comment: '', is_primary: false });
   const [phoneSaving, setPhoneSaving] = useState(false);
+  const [phoneBusyId, setPhoneBusyId] = useState(null);
 
   const isNew = id === 'new';
 
-  const loadPhones = async (clientId) => {
+  const loadPhones = useCallback(async (clientId) => {
     try {
       const res = await api.get('/clients/client_phones/', { params: { client: clientId } });
       setPhones(res.data.results || res.data || []);
     } catch (err) {
-      console.error('Failed to load phones', err);
+      notify(`Не удалось загрузить телефоны:\n${extractApiError(err)}`, 'error');
       setPhones([]);
     }
-  };
+  }, [notify]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const channelsRes = await api.get('/orders/sales_channels/').catch(() => ({ data: [] }));
-        setChannels(channelsRes.data.results || channelsRes.data || []);
+        const channelList = channelsRes.data.results || channelsRes.data || [];
+        setChannels(channelList);
 
         if (!isNew) {
           const [clientRes, ordersRes] = await Promise.all([
             api.get(`/clients/clients/${id}/`),
             api.get(`/orders/orders/?client=${id}`).catch(() => ({ data: [] })),
           ]);
-          setClient(clientRes.data);
-          setFormData(clientRes.data);
+          const loaded = clientRes.data;
+          setClient(loaded);
+          setFormData({
+            ...loaded,
+            acquisition_source: resolveAcquisition(loaded.acquisition_source, channelList),
+          });
           setOrders(ordersRes.data.results || ordersRes.data || []);
           await loadPhones(id);
         } else {
           setClient({});
-          setFormData({ discount_percent: 0, grill_type: '' });
+          setFormData({ discount_percent: 0, grill_type: '', phone: '', phone_comment: '' });
           setOrders([]);
           setPhones([]);
         }
       } catch (err) {
-        console.error('Failed to load client details', err);
+        notify(`Не удалось загрузить клиента:\n${extractApiError(err)}`, 'error');
       } finally {
         if (isNew) setClient({});
         setLoading(false);
       }
     };
     fetchData();
-  }, [id, isNew]);
+  }, [id, isNew, notify, loadPhones]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -112,6 +177,7 @@ const ClientDetail = () => {
         const payload = buildWritablePayload();
         if (formData.phone) {
           payload.phone = formData.phone;
+          payload.phone_comment = formData.phone_comment || '';
         }
         if (!payload.first_name) {
           notify('Укажите имя клиента', 'warning');
@@ -126,18 +192,33 @@ const ClientDetail = () => {
         notify('Клиент сохранен', 'success');
         const clientRes = await api.get(`/clients/clients/${id}/`);
         setClient(clientRes.data);
-        setFormData(clientRes.data);
+        setFormData({
+          ...clientRes.data,
+          acquisition_source: resolveAcquisition(clientRes.data.acquisition_source, channels),
+        });
       }
     } catch (err) {
-      console.error('Failed to save client', err);
       notify(`Ошибка при сохранении клиента:\n${extractApiError(err)}`, 'error');
     } finally {
       setSaving(false);
     }
   };
 
+  const persistPhone = async (phone, patch) => {
+    setPhoneBusyId(phone.id);
+    try {
+      await api.patch(`/clients/client_phones/${phone.id}/`, patch);
+      await loadPhones(id);
+    } catch (err) {
+      notify(`Не удалось сохранить телефон:\n${extractApiError(err)}`, 'error');
+      await loadPhones(id);
+    } finally {
+      setPhoneBusyId(null);
+    }
+  };
+
   const handleAddPhone = async () => {
-    if (!newPhone.trim()) {
+    if (!newPhone.number.trim()) {
       notify('Введите номер телефона', 'warning');
       return;
     }
@@ -145,10 +226,11 @@ const ClientDetail = () => {
     try {
       await api.post('/clients/client_phones/', {
         client: id,
-        number: newPhone.trim(),
-        is_primary: phones.length === 0,
+        number: newPhone.number.trim(),
+        comment: newPhone.comment.trim(),
+        is_primary: phones.length === 0 ? true : newPhone.is_primary,
       });
-      setNewPhone('');
+      setNewPhone({ number: '', comment: '', is_primary: false });
       await loadPhones(id);
     } catch (err) {
       notify(`Ошибка добавления телефона:\n${extractApiError(err)}`, 'error');
@@ -157,15 +239,29 @@ const ClientDetail = () => {
     }
   };
 
+  const handleDeletePhone = async (phone) => {
+    if (!(await confirm(`Удалить номер ${phone.number}?`))) return;
+    setPhoneBusyId(phone.id);
+    try {
+      await api.delete(`/clients/client_phones/${phone.id}/`);
+      await loadPhones(id);
+    } catch (err) {
+      notify(`Не удалось удалить телефон:\n${extractApiError(err)}`, 'error');
+    } finally {
+      setPhoneBusyId(null);
+    }
+  };
+
   if (loading) {
     return (
       <Box
         sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "50vh"
-        }}>
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '50vh',
+        }}
+      >
         <CircularProgress />
       </Box>
     );
@@ -205,8 +301,8 @@ const ClientDetail = () => {
             </Typography>
           )}
 
-          <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid size={{ xs: 12, sm: 3 }}>
+          <Grid container spacing={2.5}>
+            <Grid size={fieldSize}>
               <TextField
                 fullWidth
                 size="small"
@@ -216,7 +312,7 @@ const ClientDetail = () => {
                 onChange={handleInputChange}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 3 }}>
+            <Grid size={fieldSize}>
               <TextField
                 fullWidth
                 size="small"
@@ -226,7 +322,7 @@ const ClientDetail = () => {
                 onChange={handleInputChange}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 3 }}>
+            <Grid size={fieldSize}>
               <TextField
                 fullWidth
                 size="small"
@@ -236,127 +332,91 @@ const ClientDetail = () => {
                 onChange={handleInputChange}
               />
             </Grid>
-            {isNew && (
-              <Grid size={{ xs: 12, sm: 3 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Телефон"
-                  name="phone"
-                  value={formData.phone || ''}
-                  onChange={handleInputChange}
-                  placeholder="+375..."
-                />
-              </Grid>
-            )}
-          </Grid>
 
-          <Grid container spacing={3}>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                Дата первого заказа
-              </Typography>
+            {isNew && (
+              <>
+                <Grid size={fieldSize}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Телефон"
+                    name="phone"
+                    value={formData.phone || ''}
+                    onChange={handleInputChange}
+                    placeholder="+375..."
+                  />
+                </Grid>
+                <Grid size={fieldSize}>
+                  <PhoneCommentField
+                    id="new-client-phone-comment"
+                    label="Комментарий к номеру"
+                    value={formData.phone_comment || ''}
+                    onCommit={(comment) => setFormData((prev) => ({ ...prev, phone_comment: comment }))}
+                    placeholder="рабочий, WhatsApp…"
+                  />
+                </Grid>
+              </>
+            )}
+
+            <Grid size={fieldSize}>
               <TextField
                 fullWidth
                 size="small"
                 type="date"
+                label="Дата первого заказа"
                 name="first_purchase_date"
                 value={formData.first_purchase_date || ''}
                 disabled
+                sx={dateFieldSx}
+                slotProps={{ inputLabel: { shrink: true } }}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                Дата крайнего заказа
-              </Typography>
+            <Grid size={fieldSize}>
               <TextField
                 fullWidth
                 size="small"
                 type="date"
+                label="Дата крайнего заказа"
                 name="last_purchase_date"
                 value={formData.last_purchase_date || ''}
                 disabled
+                sx={dateFieldSx}
+                slotProps={{ inputLabel: { shrink: true } }}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                Канал привлечения
-              </Typography>
-              <Select
-                fullWidth
-                size="small"
-                displayEmpty
-                name="acquisition_source"
-                value={formData.acquisition_source || ''}
-                onChange={handleInputChange}
-                sx={{ color: formData.acquisition_source ? '#1A202C' : '#718096' }}
-              >
-                <MenuItem value="" disabled>
-                  Не указан
-                </MenuItem>
-                {channels.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </Select>
+            <Grid size={fieldSize}>
+              <Box sx={{ width: '100%' }}>
+                <SearchableSelect
+                  id="client-acquisition-source"
+                  label="Канал привлечения"
+                  value={formData.acquisition_source || ''}
+                  onChange={(value) => setFormData((prev) => ({ ...prev, acquisition_source: value }))}
+                  options={[
+                    { value: '', label: 'Не указан' },
+                    ...channels.map((c) => ({ value: c.name, label: c.name })),
+                  ]}
+                />
+              </Box>
             </Grid>
 
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                День рождения
-              </Typography>
+            <Grid size={fieldSize}>
               <TextField
                 fullWidth
                 size="small"
                 type="date"
+                label="День рождения"
                 name="birth_date"
                 value={formData.birth_date || ''}
                 onChange={handleInputChange}
+                sx={dateFieldSx}
+                slotProps={{ inputLabel: { shrink: true } }}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                Скидка
-              </Typography>
+            <Grid size={fieldSize}>
               <TextField
                 fullWidth
                 size="small"
+                label="Скидка"
                 name="discount_percent"
                 value={formData.discount_percent || 0}
                 onChange={handleInputChange}
@@ -369,48 +429,26 @@ const ClientDetail = () => {
                 }}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                Тип гриля
-              </Typography>
-              <Select
-                fullWidth
-                size="small"
-                displayEmpty
-                name="grill_type"
-                value={formData.grill_type || ''}
-                onChange={handleInputChange}
-              >
-                <MenuItem value="">Не указан</MenuItem>
-                {GRILL_TYPES.map((g) => (
-                  <MenuItem key={g.value} value={g.value}>
-                    {g.label}
-                  </MenuItem>
-                ))}
-              </Select>
+            <Grid size={fieldSize}>
+              <Box sx={{ width: '100%' }}>
+                <SearchableSelect
+                  id="client-grill-type"
+                  label="Тип гриля"
+                  value={formData.grill_type || ''}
+                  onChange={(value) => setFormData((prev) => ({ ...prev, grill_type: value }))}
+                  options={[
+                    { value: '', label: 'Не указан' },
+                    ...GRILL_TYPES.map((g) => ({ value: g.value, label: g.label })),
+                  ]}
+                />
+              </Box>
             </Grid>
 
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  ml: 1,
-                  mb: 0.5,
-                  display: 'block'
-                }}>
-                Общий бюджет
-              </Typography>
+            <Grid size={fieldSize}>
               <TextField
                 fullWidth
                 size="small"
+                label="Общий бюджет"
                 disabled
                 value={
                   formData.total_budget != null && formData.total_budget !== ''
@@ -419,63 +457,145 @@ const ClientDetail = () => {
                 }
               />
             </Grid>
+            <Grid size={fieldSize}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Адрес"
+                name="address"
+                value={formData.address || ''}
+                onChange={handleInputChange}
+              />
+            </Grid>
+            <Grid size={fieldSize}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Комментарий"
+                name="comment"
+                value={formData.comment || ''}
+                onChange={handleInputChange}
+              />
+            </Grid>
           </Grid>
         </Box>
 
-        {/* Phones */}
         {!isNew && (
           <Box sx={{ border: '1px solid #EDF2F7', borderRadius: 4, p: 4, mb: 4 }}>
             <Typography variant="h5" sx={{ mb: 3, fontWeight: 500, color: '#1A202C' }}>
               Телефоны
             </Typography>
-            {phones.length > 0 ? (
-              <TableContainer sx={{ mb: 3 }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Номер</TableCell>
-                      <TableCell>Комментарий</TableCell>
-                      <TableCell>Основной</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {phones.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell>{p.number}</TableCell>
-                        <TableCell>{p.comment || '—'}</TableCell>
-                        <TableCell>{p.is_primary ? 'Да' : 'Нет'}</TableCell>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ width: '34%' }}>Номер</TableCell>
+                    <TableCell sx={{ width: '34%' }}>Комментарий</TableCell>
+                    <TableCell sx={{ width: '16%' }}>Основной</TableCell>
+                    <TableCell align="right" sx={{ width: '16%' }}>Действия</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {phones.map((phone) => {
+                    const busy = phoneBusyId === phone.id;
+                    return (
+                      <TableRow key={phone.id}>
+                        <TableCell>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            disabled={busy}
+                            defaultValue={phone.number}
+                            key={`${phone.id}-${phone.number}`}
+                            placeholder="+375..."
+                            onBlur={(e) => {
+                              const next = e.target.value.trim();
+                              if (!next || next === phone.number) return;
+                              persistPhone(phone, { number: next });
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <PhoneCommentField
+                            id={`phone-comment-${phone.id}`}
+                            value={phone.comment || ''}
+                            disabled={busy}
+                            onCommit={(comment) => {
+                              if (comment === (phone.comment || '')) return;
+                              persistPhone(phone, { comment });
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Checkbox
+                            checked={Boolean(phone.is_primary)}
+                            disabled={busy || phone.is_primary}
+                            onChange={() => persistPhone(phone, { is_primary: true })}
+                            slotProps={{ input: { 'aria-label': `Основной номер ${phone.number}` } }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Tooltip title="Удалить номер">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                disabled={busy}
+                                aria-label={`Удалить номер ${phone.number}`}
+                                onClick={() => handleDeletePhone(phone)}
+                              >
+                                <span className="material-icons" style={{ fontSize: 20 }} aria-hidden="true">
+                                  delete
+                                </span>
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            ) : (
-              <Typography
-                variant="body2"
-                sx={{
-                  color: "text.secondary",
-                  mb: 3
-                }}>
-                Телефоны не добавлены
-              </Typography>
-            )}
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', maxWidth: 480 }}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="+375..."
-                value={newPhone}
-                onChange={(e) => setNewPhone(e.target.value)}
-              />
-              <Button
-                variant="outlined"
-                disabled={phoneSaving}
-                onClick={handleAddPhone}
-                sx={{ whiteSpace: 'nowrap' }}
-              >
-                {phoneSaving ? <CircularProgress size={20} /> : 'Добавить'}
-              </Button>
-            </Box>
+                    );
+                  })}
+                  <TableRow>
+                    <TableCell>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        placeholder="+375..."
+                        value={newPhone.number}
+                        onChange={(e) => setNewPhone((prev) => ({ ...prev, number: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddPhone();
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <PhoneCommentField
+                        id="new-phone-comment"
+                        value={newPhone.comment}
+                        onCommit={(comment) => setNewPhone((prev) => ({ ...prev, comment }))}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Checkbox
+                        checked={phones.length === 0 ? true : newPhone.is_primary}
+                        disabled={phones.length === 0}
+                        onChange={(e) => setNewPhone((prev) => ({ ...prev, is_primary: e.target.checked }))}
+                        slotProps={{ input: { 'aria-label': 'Сделать основным' } }}
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        variant="outlined"
+                        disabled={phoneSaving}
+                        onClick={handleAddPhone}
+                        sx={{ whiteSpace: 'nowrap' }}
+                      >
+                        {phoneSaving ? <CircularProgress size={20} /> : 'Добавить'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
           </Box>
         )}
 
@@ -504,9 +624,6 @@ const ClientDetail = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell padding="checkbox">
-                      <Checkbox size="small" />
-                    </TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#4A5568' }}>№ Заказа</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#4A5568' }}>Дата заказа</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#4A5568' }}>Дата доставки</TableCell>
@@ -528,13 +645,24 @@ const ClientDetail = () => {
                       sx={{ cursor: 'pointer' }}
                       onClick={() => navigate(`/orders/${row.id}`)}
                     >
-                      <TableCell padding="checkbox">
-                        <Checkbox size="small" />
+                      <TableCell sx={{ color: '#4A5568' }} onClick={(e) => e.stopPropagation()}>
+                        <Box
+                          component={RouterLink}
+                          to={`/orders/${row.id}`}
+                          aria-label={`Открыть заказ ${row.order_number}`}
+                          sx={{
+                            color: 'inherit',
+                            textDecoration: 'none',
+                            fontWeight: 500,
+                            '&:hover': { textDecoration: 'underline' },
+                          }}
+                        >
+                          #{row.order_number}
+                        </Box>
                       </TableCell>
-                      <TableCell sx={{ color: '#4A5568' }}>#{row.order_number}</TableCell>
-                      <TableCell sx={{ color: '#4A5568' }}>{row.order_date}</TableCell>
+                      <TableCell sx={{ color: '#4A5568' }}>{formatDate(row.order_date) || '—'}</TableCell>
                       <TableCell sx={{ color: '#4A5568' }}>
-                        {row.completed_at ? row.completed_at.substring(0, 10) : ''}
+                        {formatDate(row.completed_at) || '—'}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -575,13 +703,13 @@ const ClientDetail = () => {
                         />
                       </TableCell>
                       <TableCell align="right" sx={{ color: '#4A5568', fontWeight: 500 }}>
-                        {row.total} BYN
+                        {formatCurrency(row.total)}
                       </TableCell>
                     </TableRow>
                   ))}
                   {orders.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={10} align="center" sx={{ py: 3, color: '#718096' }}>
+                      <TableCell colSpan={9} align="center" sx={{ py: 3, color: '#718096' }}>
                         Нет заказов для данного клиента
                       </TableCell>
                     </TableRow>

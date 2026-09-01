@@ -37,6 +37,10 @@ def test_stock_deduction_on_order_item_creation():
     WarehouseService.reserve_stock_for_item(item)
 
     stock.refresh_from_db()
+    assert stock.stock_quantity == 10
+
+    WarehouseService.deduct_stock_for_item(item)
+    stock.refresh_from_db()
     assert stock.stock_quantity == 7
 
 @pytest.mark.django_db
@@ -127,9 +131,8 @@ def test_update_stock_for_item_update_product_swap():
     )
     WarehouseService.reserve_stock_for_item(item)
     stock_a.refresh_from_db()
-    assert stock_a.stock_quantity == 7
+    assert stock_a.stock_quantity == 10
 
-    # Swap the item to product B with a different quantity
     item.product_card = product_b
     item.quantity = 4
     item.save()
@@ -140,5 +143,85 @@ def test_update_stock_for_item_update_product_swap():
 
     stock_a.refresh_from_db()
     stock_b.refresh_from_db()
-    assert stock_a.stock_quantity == 10  # old reservation fully released
-    assert stock_b.stock_quantity == 6   # new product reserved
+    assert stock_a.stock_quantity == 10
+    assert stock_b.stock_quantity == 10
+
+
+@pytest.mark.django_db
+def test_stock_list_filters_category_tag_and_expiry():
+    from datetime import date
+    from rest_framework.test import APIClient
+
+    user = User.objects.create_user(username='wh_f', email='whf@test.com', password='pwd', role='manager')
+    cat_a = ProductCategory.objects.create(name='Грили', code='A')
+    cat_c = ProductCategory.objects.create(name='Топливо', code='C')
+    supplier = Supplier.objects.create(name='FilterSup')
+    grill = ProductCard.objects.create(
+        name='Grill F', sku='F-A', category=cat_a, supplier=supplier, base_cost_price=10, min_stock=5,
+    )
+    fuel = ProductCard.objects.create(
+        name='Pellets F', sku='F-C', category=cat_c, supplier=supplier, base_cost_price=1, min_stock=20,
+    )
+    low = StockItem.objects.create(product_card=grill, stock_quantity=2, expiry_date=date(2026, 1, 10))
+    plenty = StockItem.objects.create(product_card=fuel, stock_quantity=50, expiry_date=date(2026, 8, 20))
+
+    api = APIClient()
+    api.force_authenticate(user=user)
+
+    by_cat = api.get('/api/v1/warehouse/stock_items/', {'category': cat_a.pk})
+    assert by_cat.status_code == 200
+    ids = [row['id'] for row in by_cat.data['results']]
+    assert low.pk in ids
+    assert plenty.pk not in ids
+
+    by_tag = api.get('/api/v1/warehouse/stock_items/', {'stock_tag': 'Товар заканчивается'})
+    assert by_tag.status_code == 200
+    tag_ids = [row['id'] for row in by_tag.data['results']]
+    assert low.pk in tag_ids
+    assert plenty.pk not in tag_ids
+
+    by_expiry = api.get('/api/v1/warehouse/stock_items/', {
+        'expiry_after': '2026-08-01',
+        'expiry_before': '2026-08-31',
+    })
+    assert by_expiry.status_code == 200
+    exp_ids = [row['id'] for row in by_expiry.data['results']]
+    assert plenty.pk in exp_ids
+    assert low.pk not in exp_ids
+
+    by_qty = api.get('/api/v1/warehouse/stock_items/', {'stock_min': 10, 'stock_max': 60})
+    assert by_qty.status_code == 200
+    qty_ids = [row['id'] for row in by_qty.data['results']]
+    assert plenty.pk in qty_ids
+    assert low.pk not in qty_ids
+
+    by_cat_name = api.get('/api/v1/warehouse/stock_items/', {'ordering': '-product_card__category__name'})
+    assert by_cat_name.status_code == 200
+    names = [row['category_name'] for row in by_cat_name.data['results']]
+    assert names == ['Топливо', 'Грили']
+
+
+@pytest.mark.django_db
+def test_post_stock_increments_existing_row():
+    from rest_framework.test import APIClient
+
+    user = User.objects.create_user(username='wh_inc', email='whinc@test.com', password='pwd', role='seller')
+    category = ProductCategory.objects.create(name='Грили', code='A')
+    supplier = Supplier.objects.create(name='IncSup')
+    product = ProductCard.objects.create(
+        name='Grill Inc', sku='INC-1', category=category, supplier=supplier, base_cost_price=10,
+    )
+    stock = StockItem.objects.create(product_card=product, stock_quantity=5)
+    api = APIClient()
+    api.force_authenticate(user=user)
+
+    response = api.post('/api/v1/warehouse/stock_items/', {
+        'product_card': product.pk,
+        'stock_quantity': 3,
+    })
+    assert response.status_code == 200, response.data
+    assert response.data['id'] == stock.pk
+    assert response.data['stock_quantity'] == 8
+    assert StockItem.objects.filter(product_card=product).count() == 1
+    stock.refresh_from_db()
+    assert stock.stock_quantity == 8

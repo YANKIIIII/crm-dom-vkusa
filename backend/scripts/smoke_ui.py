@@ -25,7 +25,7 @@ def check(name, ok, detail=''):
 
 def login(page, username, password):
     page.goto(f'{BASE}/login', wait_until='networkidle')
-    page.get_by_label('Email (Username)').fill(username)
+    page.get_by_label('Логин').fill(username)
     page.get_by_label('Пароль').fill(password)
     page.get_by_role('button', name='Войти').click()
     page.wait_for_url(lambda url: '/login' not in url, timeout=15000)
@@ -50,11 +50,11 @@ def seller_create_order(seller):
     if not (date_input.input_value() or '').strip():
         date_input.fill(date.today().isoformat())
 
-    # Sales channel: open Select, pick first real MenuItem (skip disabled placeholder)
-    channel_trigger = seller.locator('.MuiSelect-select').filter(has_text='Выберите канал').first
-    channel_trigger.wait_for(state='visible', timeout=10000)
-    channel_trigger.click()
-    real_option = seller.locator('[role="listbox"] [role="option"]:not([aria-disabled="true"])').first
+    # Sales channel: searchable Autocomplete, pick first option
+    channel = seller.get_by_label('Канал привлечения')
+    channel.wait_for(state='visible', timeout=10000)
+    channel.click()
+    real_option = seller.locator('[role="listbox"] [role="option"]').first
     real_option.wait_for(state='visible', timeout=10000)
     real_option.click()
 

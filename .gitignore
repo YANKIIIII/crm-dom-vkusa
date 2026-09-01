@@ -37,3 +37,6 @@ terminals/
 
 # Local compose volume overrides
 docker-compose.override.yml
+
+# Database backups
+backups/

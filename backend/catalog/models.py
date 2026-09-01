@@ -26,6 +26,8 @@ class ProductCard(models.Model):
         CHARCOAL = 'charcoal', 'Угольный'
         GAS = 'gas', 'Газовый'
         CERAMIC = 'ceramic', 'Керамический'
+        ELECTRIC = 'electric', 'Электрический'
+        PELLET = 'pellet', 'Пеллетный'
 
     name = models.CharField(max_length=255, verbose_name='Наименование')
     sku = models.CharField(max_length=50, unique=True, verbose_name='Артикул')

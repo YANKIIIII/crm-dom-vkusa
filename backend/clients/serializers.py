@@ -3,6 +3,7 @@ from .models import Client, ClientPhone
 
 class ClientSerializer(serializers.ModelSerializer):
     phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    phone_comment = serializers.CharField(write_only=True, required=False, allow_blank=True)
     primary_phone = serializers.SerializerMethodField(read_only=True)
     grill_type_display = serializers.CharField(source='get_grill_type_display', read_only=True)
     
@@ -22,9 +23,15 @@ class ClientSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         phone = validated_data.pop('phone', None)
+        phone_comment = validated_data.pop('phone_comment', '')
         client = super().create(validated_data)
         if phone:
-            ClientPhone.objects.create(client=client, number=phone, is_primary=True)
+            ClientPhone.objects.create(
+                client=client,
+                number=phone,
+                comment=phone_comment or '',
+                is_primary=True,
+            )
         return client
 
     def get_primary_phone(self, obj):

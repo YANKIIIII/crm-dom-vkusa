@@ -1,16 +1,34 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
+import django_filters
+from common.audit import write_audit
 from .models import Client, ClientPhone
 from .serializers import ClientSerializer, ClientPhoneSerializer
 
-from rest_framework.exceptions import PermissionDenied
+
+class ClientFilter(django_filters.FilterSet):
+    discount_min = django_filters.NumberFilter(field_name='discount_percent', lookup_expr='gte')
+    discount_max = django_filters.NumberFilter(field_name='discount_percent', lookup_expr='lte')
+    last_purchase_after = django_filters.DateFilter(field_name='last_purchase_date', lookup_expr='gte')
+    last_purchase_before = django_filters.DateFilter(field_name='last_purchase_date', lookup_expr='lte')
+
+    class Meta:
+        model = Client
+        fields = ['purchase_category', 'grill_type']
+
 
 class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.select_related('seller').prefetch_related('phones').order_by('-id')
     serializer_class = ClientSerializer
     permission_classes = [IsAuthenticated]
-    filterset_fields = ['purchase_category', 'grill_type']
+    filterset_class = ClientFilter
     search_fields = ['first_name', 'last_name', 'email', 'phones__number']
+    ordering_fields = [
+        'id', 'first_name', 'last_name', 'email', 'discount_percent',
+        'purchase_category', 'last_purchase_date', 'first_purchase_date', 'total_budget',
+    ]
+    ordering = ['-id']
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -22,17 +40,27 @@ class ClientViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         if hasattr(user, 'role') and user.role == 'seller':
-            serializer.save(seller=user)
+            instance = serializer.save(seller=user)
         else:
-            serializer.save()
+            instance = serializer.save()
+        write_audit(user, 'CREATE', 'client', instance.pk)
 
     def perform_update(self, serializer):
+        old_discount = serializer.instance.discount_percent
         user = self.request.user
         if hasattr(user, 'role') and user.role == 'seller':
-            # Нельзя менять продавца
-            serializer.save(seller=user)
+            instance = serializer.save(seller=user)
         else:
-            serializer.save()
+            instance = serializer.save()
+        write_audit(user, 'UPDATE', 'client', instance.pk)
+        if instance.discount_percent != old_discount:
+            from clients.services import ClientService
+            ClientService.recalculate_budget(instance)
+
+    def perform_destroy(self, instance):
+        pk = instance.pk
+        instance.delete()
+        write_audit(self.request.user, 'DELETE', 'client', pk)
 
     def destroy(self, request, *args, **kwargs):
         if hasattr(request.user, 'role') and request.user.role == 'seller':
@@ -46,22 +74,20 @@ class ClientPhoneViewSet(viewsets.ModelViewSet):
     filterset_fields = ['client']
 
     def get_queryset(self):
-        qs = super().get_queryset()
-        user = self.request.user
-        if hasattr(user, 'role') and user.role == 'seller':
-            qs = qs.filter(client__seller=user)
-        return qs
+        return super().get_queryset()
+
+    def _sync_primary(self, instance):
+        if not instance.is_primary:
+            return
+        ClientPhone.objects.filter(
+            client_id=instance.client_id,
+            is_primary=True,
+        ).exclude(pk=instance.pk).update(is_primary=False)
 
     def perform_create(self, serializer):
-        client = serializer.validated_data.get('client')
-        if hasattr(self.request.user, 'role') and self.request.user.role == 'seller':
-            if client.seller != self.request.user:
-                raise PermissionDenied("Нельзя добавлять телефоны чужим клиентам.")
-        serializer.save()
+        instance = serializer.save()
+        self._sync_primary(instance)
 
     def perform_update(self, serializer):
-        client = serializer.validated_data.get('client')
-        if hasattr(self.request.user, 'role') and self.request.user.role == 'seller':
-            if client is not None and client.seller != self.request.user:
-                raise PermissionDenied("Нельзя переносить телефоны чужим клиентам.")
-        serializer.save()
+        instance = serializer.save()
+        self._sync_primary(instance)

@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
-  Button, TextField, Box, Select, MenuItem, Grid,
+  Button, TextField, Box, Grid,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Checkbox, Typography, Pagination,
 } from '@mui/material';
 import api from '../api';
-import { formatCurrency, PAGE_SIZE } from '../utils';
+import { formatCurrency, PAGE_SIZE, extractApiError, GRILL_TYPE_LABELS } from '../utils';
+import { useFeedback } from '../hooks/useFeedback';
+import SearchableSelect from './SearchableSelect';
+import TruncatedText from './TruncatedText';
+import ProductPreviewTooltip from './ProductPreviewTooltip';
 
 const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
+  const { notify } = useFeedback();
   const [searchInput, setSearchInput] = useState('');
   const [categoryInput, setCategoryInput] = useState('');
   const [price, setPrice] = useState('');
@@ -48,7 +53,9 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
           setTotalCount(res.data.length);
         }
       } catch (err) {
-        if (!cancelled) console.error("Failed to search products", err);
+        if (!cancelled) {
+          notify(`Не удалось найти товары:\n${extractApiError(err)}`, 'error');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -58,7 +65,7 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
     return () => {
       cancelled = true;
     };
-  }, [open, page, search, category, listVersion]);
+  }, [open, page, search, category, listVersion, notify]);
 
   const handleSearchClick = () => {
     setPage(1);
@@ -81,10 +88,15 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
     }
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const selectedProducts = products.filter(p => selectedIds.includes(p.id));
-    onAdd(selectedProducts);
-    onClose();
+    if (!selectedProducts.length) return;
+    try {
+      await Promise.resolve(onAdd(selectedProducts));
+      onClose();
+    } catch {
+      // Parent already surfaces the API error.
+    }
   };
 
   return (
@@ -108,19 +120,16 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
           />
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 4 }}>
-              <Select
-                fullWidth
-                size="small"
-                displayEmpty
+              <SearchableSelect
+                id="product-search-category"
+                label="Категория"
                 value={categoryInput}
-                onChange={(e) => setCategoryInput(e.target.value)}
-                sx={{ borderRadius: 2 }}
-              >
-                <MenuItem value="">Категория</MenuItem>
-                {categories.map(c => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                ))}
-              </Select>
+                onChange={setCategoryInput}
+                options={[
+                  { value: '', label: 'Все категории' },
+                  ...categories.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
@@ -211,16 +220,18 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
                         />
                       </TableCell>
                       <TableCell>
-                        <Box>
-                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: '#2D3748' }}>{product.name}</Typography>
-                          <Typography variant="caption" sx={{ color: '#A0AEC0' }}>{product.sku}</Typography>
-                        </Box>
+                        <ProductPreviewTooltip product={product}>
+                          <Box>
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem', color: '#2D3748', maxWidth: 220 }}>
+                              <TruncatedText>{product.name}</TruncatedText>
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#A0AEC0' }}>{product.sku}</Typography>
+                          </Box>
+                        </ProductPreviewTooltip>
                       </TableCell>
                       <TableCell sx={{ fontSize: '0.8rem' }}>{product.category_name || '-'}</TableCell>
                       <TableCell sx={{ fontSize: '0.8rem' }}>
-                        {product.grill_type === 'gas' ? 'Газовый' : 
-                         product.grill_type === 'charcoal' ? 'Угольный' : 
-                         product.grill_type === 'ceramic' ? 'Керамический' : '-'}
+                        {GRILL_TYPE_LABELS[product.grill_type] || '-'}
                       </TableCell>
                       <TableCell sx={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{product.dimensions || '—'}</TableCell>
                       <TableCell sx={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{product.weight ? `${product.weight} кг` : '—'}</TableCell>

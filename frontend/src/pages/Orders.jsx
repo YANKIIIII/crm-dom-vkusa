@@ -2,12 +2,19 @@ import {
   Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Checkbox, Avatar, Chip, TablePagination,
   IconButton, Tooltip, CircularProgress,
+  Tabs, Tab,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { useFeedback } from '../hooks/useFeedback';
-import { PAGE_SIZE, formatCurrency, formatDate, extractApiError } from '../utils';
+import {
+  PAGE_SIZE, PAGE_SIZE_OPTIONS, formatCurrency, formatDate, extractApiError,
+  toggleOrdering, buildListQuery,
+} from '../utils';
+import SortableHeader from '../components/SortableHeader';
+import SearchableSelect from '../components/SearchableSelect';
+import TruncatedText from '../components/TruncatedText';
 
 const isDeletableStatus = (status) => status !== 'completed';
 
@@ -18,8 +25,15 @@ const Orders = () => {
   const isManager = localStorage.getItem('user_role') === 'manager';
 
   const urlSearch = searchParams.get('search') ?? '';
+  const urlView = searchParams.get('view') === 'unassigned' ? 'unassigned' : 'all';
+  const urlStatus = searchParams.get('status') ?? '';
+  const urlOrdering = searchParams.get('ordering') || '-id';
   const urlPage1Based = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+  const urlPageSize = PAGE_SIZE_OPTIONS.includes(Number(searchParams.get('page_size')))
+    ? Number(searchParams.get('page_size'))
+    : PAGE_SIZE;
   const page = urlPage1Based - 1;
+  const effectiveStatus = urlView === 'unassigned' ? 'reserved' : urlStatus;
 
   const [searchInput, setSearchInput] = useState(urlSearch);
   const [orders, setOrders] = useState([]);
@@ -38,14 +52,22 @@ const Orders = () => {
       setLoading(true);
       try {
         const response = await api.get(
-          `/orders/orders/?page=${urlPage1Based}&search=${encodeURIComponent(urlSearch)}`
+          `/orders/orders/?${buildListQuery({
+            page: urlPage1Based,
+            pageSize: urlPageSize,
+            search: urlSearch,
+            ordering: urlOrdering,
+            extra: { status: effectiveStatus },
+          })}`
         );
         if (cancelled) return;
         setOrders(response.data.results || response.data);
         setTotalCount(response.data.count || 0);
         setSelectedIds(new Set());
       } catch (error) {
-        if (!cancelled) console.error('Failed to fetch orders:', error);
+        if (!cancelled) {
+          notify(`Не удалось загрузить заказы:\n${extractApiError(error)}`, 'error');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -54,22 +76,40 @@ const Orders = () => {
     return () => {
       cancelled = true;
     };
-  }, [urlSearch, urlPage1Based]);
+  }, [urlSearch, urlPage1Based, urlPageSize, urlOrdering, effectiveStatus, notify]);
 
-  const updateUrl = (nextSearch, nextPage0Based) => {
+  const updateUrl = (next) => {
     const params = new URLSearchParams();
-    params.set('search', nextSearch);
-    params.set('page', String(nextPage0Based + 1));
+    params.set('search', next.search ?? urlSearch);
+    params.set('page', String((next.page0Based ?? page) + 1));
+    params.set('page_size', String(next.pageSize ?? urlPageSize));
+    params.set('ordering', next.ordering ?? urlOrdering);
+    const view = next.view === undefined ? urlView : next.view;
+    if (view === 'unassigned') params.set('view', 'unassigned');
+    const status = next.status === undefined ? urlStatus : next.status;
+    if (view !== 'unassigned' && status) params.set('status', status);
     setSearchParams(params);
   };
 
   const handleSearch = () => {
-    updateUrl(searchInput, 0);
+    updateUrl({ search: searchInput, page0Based: 0 });
   };
 
   const handlePageChange = (e, newPage) => {
     setSearchInput(urlSearch);
-    updateUrl(urlSearch, newPage);
+    updateUrl({ search: urlSearch, page0Based: newPage });
+  };
+
+  const handlePageSizeChange = (e) => {
+    updateUrl({ search: urlSearch, page0Based: 0, pageSize: Number(e.target.value) });
+  };
+
+  const handleSort = (field, defaultDesc) => {
+    updateUrl({
+      search: urlSearch,
+      page0Based: 0,
+      ordering: toggleOrdering(urlOrdering, field, defaultDesc),
+    });
   };
 
   const pageIds = useMemo(() => orders.map((o) => o.id), [orders]);
@@ -107,7 +147,7 @@ const Orders = () => {
 
     const confirmMsg = blocked.length
       ? `Удалить ${allowed.length} заказ(ов)? ${blocked.length} завершённых будут пропущены.`
-      : `Удалить выбранные заказы (${allowed.length})? Товар вернётся на склад (если заказ не отменён).`;
+      : `Удалить выбранные заказы (${allowed.length})?`;
 
     if (!(await confirm(confirmMsg))) return;
 
@@ -122,7 +162,13 @@ const Orders = () => {
         }
       }
       const response = await api.get(
-        `/orders/orders/?page=${urlPage1Based}&search=${encodeURIComponent(urlSearch)}`
+          `/orders/orders/?${buildListQuery({
+            page: urlPage1Based,
+            pageSize: urlPageSize,
+            search: urlSearch,
+            ordering: urlOrdering,
+            extra: { status: effectiveStatus },
+          })}`
       );
       setOrders(response.data.results || response.data);
       setTotalCount(response.data.count || 0);
@@ -150,13 +196,21 @@ const Orders = () => {
     deleteOrdersByIds([order.id]);
   };
 
-  const colCount = isManager ? 9 : 8;
+  const colCount = isManager ? 10 : 9;
 
   return (
     <Box sx={{ maxWidth: 1400, margin: '0 auto' }}>
       <Typography variant="h4" sx={{ mb: 4 }}>Заказы</Typography>
 
       <Paper sx={{ p: 0, overflow: 'hidden' }}>
+        <Tabs
+          value={urlView}
+          onChange={(_, next) => updateUrl({ search: urlSearch, page0Based: 0, view: next, status: '' })}
+          sx={{ px: 2, borderBottom: '1px solid #EDF2F7' }}
+        >
+          <Tab value="all" label="Все заказы" />
+          <Tab value="unassigned" label="Нераспределённые" />
+        </Tabs>
         <Box sx={{ p: 3, display: 'flex', gap: 2, alignItems: 'center', borderBottom: '1px solid #EDF2F7' }}>
           <TextField
             placeholder="Поиск…"
@@ -167,6 +221,24 @@ const Orders = () => {
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             slotProps={{ input: { 'aria-label': 'Поиск заказов' } }}
           />
+          {urlView !== 'unassigned' && (
+          <Box sx={{ minWidth: 200 }}>
+            <SearchableSelect
+              id="orders-status-filter"
+              label="Статус"
+              value={urlStatus}
+              onChange={(value) => updateUrl({ search: urlSearch, page0Based: 0, view: 'all', status: value })}
+              options={[
+                { value: '', label: 'Все' },
+                { value: 'reserved', label: 'Резерв' },
+                { value: 'confirmed', label: 'Подтвержден' },
+                { value: 'in_delivery', label: 'В доставке' },
+                { value: 'completed', label: 'Завершен' },
+                { value: 'cancelled', label: 'Отменен' },
+              ]}
+            />
+          </Box>
+          )}
           <Box sx={{ flexGrow: 1 }} />
           {isManager && selectedIds.size > 0 && (
             <Button
@@ -194,7 +266,7 @@ const Orders = () => {
           </Button>
         </Box>
 
-        <TableContainer>
+        <TableContainer sx={{ overflowX: 'auto' }}>
           <Table>
             <TableHead>
               <TableRow>
@@ -207,12 +279,13 @@ const Orders = () => {
                     slotProps={{ input: { 'aria-label': 'Выбрать все заказы на странице' } }}
                   />
                 </TableCell>
-                <TableCell>№ Заказа</TableCell>
-                <TableCell>Дата заказа</TableCell>
-                <TableCell>Продавец</TableCell>
+                <SortableHeader field="order_number" label="№ Заказа" ordering={urlOrdering} onSort={handleSort} />
+                <SortableHeader field="order_date" label="Дата заказа" ordering={urlOrdering} onSort={handleSort} defaultDesc />
+                <SortableHeader field="client__last_name" label="Клиент" ordering={urlOrdering} onSort={handleSort} />
+                <SortableHeader field="seller__first_name" label="Продавец" ordering={urlOrdering} onSort={handleSort} />
                 <TableCell>Канал продажи</TableCell>
-                <TableCell>Скидка</TableCell>
-                <TableCell>Статус</TableCell>
+                <SortableHeader field="discount_percent" label="Скидка" ordering={urlOrdering} onSort={handleSort} />
+                <SortableHeader field="status" label="Статус" ordering={urlOrdering} onSort={handleSort} />
                 <TableCell align="right">Стоимость</TableCell>
                 {isManager && <TableCell align="right">Действия</TableCell>}
               </TableRow>
@@ -250,40 +323,33 @@ const Orders = () => {
                           slotProps={{ input: { 'aria-label': `Выбрать заказ ${row.order_number}` } }}
                         />
                       </TableCell>
-                      <TableCell
-                        sx={{ color: '#4A5568' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/orders/${row.id}`);
-                        }}
-                      >
+                      <TableCell sx={{ color: '#4A5568' }} onClick={(e) => e.stopPropagation()}>
                         <Box
-                          component="span"
-                          role="link"
-                          tabIndex={0}
+                          component={RouterLink}
+                          to={`/orders/${row.id}`}
                           aria-label={`Открыть заказ ${row.order_number}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/orders/${row.id}`);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              navigate(`/orders/${row.id}`);
-                            }
+                          sx={{
+                            color: 'inherit',
+                            textDecoration: 'none',
+                            fontWeight: 500,
+                            '&:hover': { textDecoration: 'underline' },
                           }}
                         >
                           #{row.order_number}
                         </Box>
                       </TableCell>
                       <TableCell sx={{ color: '#4A5568' }}>{formatDate(row.order_date) || '—'}</TableCell>
+                      <TableCell sx={{ color: '#4A5568', maxWidth: 200 }}>
+                        <TruncatedText>
+                          {[row.client_last_name, row.client_name].filter(Boolean).join(' ') || '—'}
+                        </TruncatedText>
+                      </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Avatar sx={{ width: 24, height: 24, fontSize: 10, bgcolor: '#CBD5E0', color: '#1A202C' }}>
                             {row.seller_name ? row.seller_name.substring(0, 2).toUpperCase() : 'ВА'}
                           </Avatar>
-                          <Typography variant="body2">{row.seller_name || 'Неизвестно'}</Typography>
+                          <Typography variant="body2"><TruncatedText>{row.seller_name || 'Неизвестно'}</TruncatedText></Typography>
                         </Box>
                       </TableCell>
                       <TableCell sx={{ color: '#4A5568' }}>{row.sales_channel_name}</TableCell>
@@ -331,7 +397,7 @@ const Orders = () => {
                                 disabled={!canDelete || deleting}
                                 onClick={(e) => handleDeleteOne(e, row)}
                               >
-                                <span className="material-icons" style={{ fontSize: 20 }}>
+                                <span className="material-icons" style={{ fontSize: 20 }} aria-hidden="true">
                                   delete
                                 </span>
                               </IconButton>
@@ -352,9 +418,9 @@ const Orders = () => {
           count={totalCount}
           page={page}
           onPageChange={handlePageChange}
-          rowsPerPage={PAGE_SIZE}
-          onRowsPerPageChange={() => {}}
-          rowsPerPageOptions={[PAGE_SIZE]}
+          rowsPerPage={urlPageSize}
+          onRowsPerPageChange={handlePageSizeChange}
+          rowsPerPageOptions={PAGE_SIZE_OPTIONS}
         />
       </Paper>
     </Box>

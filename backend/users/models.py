@@ -27,3 +27,12 @@ class UserProfile(models.Model):
     class Meta:
         db_table = 'user_profiles'
 
+
+class AuthLock(models.Model):
+    username = models.CharField(max_length=150, unique=True)
+    failed_count = models.PositiveSmallIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'auth_locks'
+

@@ -20,6 +20,25 @@ const Layout = () => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
+      <Box
+        component="a"
+        href="#main-content"
+        sx={{
+          position: 'absolute',
+          left: -9999,
+          '&:focus': {
+            left: 16,
+            top: 16,
+            zIndex: 2000,
+            px: 2,
+            py: 1,
+            bgcolor: 'background.paper',
+            color: 'text.primary',
+          },
+        }}
+      >
+        К содержимому
+      </Box>
       <Sidebar
         mobile={mobile}
         mobileOpen={mobileOpen}
@@ -27,6 +46,7 @@ const Layout = () => {
       />
       <Box
         component="main"
+        id="main-content"
         sx={{
           flexGrow: 1,
           p: 4,
@@ -41,7 +61,7 @@ const Layout = () => {
               edge="start"
               onClick={handleDrawerToggle}
             >
-              <span className="material-icons">menu</span>
+              <span className="material-icons" aria-hidden="true">menu</span>
             </IconButton>
           </Box>
         )}

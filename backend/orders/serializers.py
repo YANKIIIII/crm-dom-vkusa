@@ -7,6 +7,7 @@ from .models import (
     Order,
     OrderItem,
     OrderPayment,
+    OrderDelivery,
     SalesChannel,
     PaymentType,
     DeliveryService,
@@ -15,6 +16,16 @@ from .models import (
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product_card.name', read_only=True)
     product_sku = serializers.CharField(source='product_card.sku', read_only=True)
+    product_category_name = serializers.CharField(source='product_card.category.name', read_only=True)
+    product_grill_type = serializers.CharField(source='product_card.grill_type', read_only=True, allow_null=True)
+    product_dimensions = serializers.CharField(source='product_card.dimensions', read_only=True)
+    product_weight = serializers.DecimalField(
+        source='product_card.weight', max_digits=8, decimal_places=2, read_only=True, allow_null=True,
+    )
+    product_rrp = serializers.DecimalField(
+        source='product_card.rrp', max_digits=12, decimal_places=2, read_only=True, allow_null=True,
+    )
+    product_supplier_name = serializers.CharField(source='product_card.supplier.name', read_only=True)
     price_with_vat = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     line_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
 
@@ -63,17 +74,45 @@ class OrderPaymentSerializer(serializers.ModelSerializer):
 
         return attrs
 
+
+class OrderDeliverySerializer(serializers.ModelSerializer):
+    delivery_service_name = serializers.CharField(source='delivery_service.name', read_only=True)
+
+    class Meta:
+        model = OrderDelivery
+        fields = '__all__'
+
+
+def _primary_phone(client):
+    if client is None:
+        return None
+    phones = list(client.phones.all())
+    if not phones:
+        return None
+    for phone in phones:
+        if phone.is_primary:
+            return phone
+    return phones[0]
+
+
 class OrderSerializer(serializers.ModelSerializer):
-    seller_name = serializers.CharField(source='seller.first_name', read_only=True)
+    seller_name = serializers.CharField(
+        source='seller.first_name', read_only=True, allow_null=True, default=None
+    )
     client_name = serializers.CharField(source='client.first_name', read_only=True)
     client_last_name = serializers.CharField(source='client.last_name', read_only=True)
-    sales_channel_name = serializers.CharField(source='sales_channel.name', read_only=True)
+    client_phone = serializers.SerializerMethodField()
+    client_phone_id = serializers.SerializerMethodField()
+    sales_channel_name = serializers.CharField(
+        source='sales_channel.name', read_only=True, allow_null=True, default=None
+    )
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     total = serializers.DecimalField(source='total_amount', max_digits=12, decimal_places=2, read_only=True)
     items = OrderItemSerializer(many=True, read_only=True)
     payments = OrderPaymentSerializer(many=True, read_only=True)
+    deliveries = OrderDeliverySerializer(many=True, read_only=True)
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
-    
+
     class Meta:
         model = Order
         fields = '__all__'
@@ -85,16 +124,28 @@ class OrderSerializer(serializers.ModelSerializer):
             'seller_name',
             'client_name',
             'client_last_name',
+            'client_phone',
+            'client_phone_id',
             'sales_channel_name',
             'status_display',
             'total',
             'items',
             'payments',
+            'deliveries',
         )
         extra_kwargs = {
             'order_number': {'required': False},
-            'seller': {'required': False},
+            'seller': {'required': False, 'allow_null': True},
+            'sales_channel': {'required': False, 'allow_null': True},
         }
+
+    def get_client_phone(self, obj):
+        phone = _primary_phone(obj.client)
+        return phone.number if phone else None
+
+    def get_client_phone_id(self, obj):
+        phone = _primary_phone(obj.client)
+        return phone.pk if phone else None
 
     def validate_status(self, value):
         # Creation may start at any status; the state machine applies only on update.

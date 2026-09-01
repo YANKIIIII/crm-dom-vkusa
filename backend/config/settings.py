@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
     'corsheaders',
     'django_filters',
@@ -143,11 +144,12 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
+    'DEFAULT_PAGINATION_CLASS': 'common.pagination.StandardPagination',
+    'PAGE_SIZE': 25,
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
     ],
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
@@ -156,6 +158,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
         'user': '5000/hour',
+        'login': '5/minute',
     },
 }
 
@@ -163,6 +166,8 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'AUTH_HEADER_TYPES': ('Bearer',),
+    'UPDATE_LAST_LOGIN': True,
+    'BLACKLIST_AFTER_ROTATION': True,
 }
 
 CORS_ALLOWED_ORIGINS = env('CORS_ALLOWED_ORIGINS')

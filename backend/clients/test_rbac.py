@@ -48,19 +48,18 @@ def test_seller_cannot_patch_other_sellers_client():
 
 
 @pytest.mark.django_db
-def test_seller_cannot_repoint_phone_to_other_sellers_client():
+def test_seller_can_edit_other_sellers_client_phone():
     seller1 = User.objects.create_user(username='seller1', email='s1@test.com', password='pwd', role='seller')
     seller2 = User.objects.create_user(username='seller2', email='s2@test.com', password='pwd', role='seller')
-    own_client = Client.objects.create(first_name='Ivan', seller=seller1)
     foreign_client = Client.objects.create(first_name='Petr', seller=seller2)
-    phone = ClientPhone.objects.create(client=own_client, number='+70000000001')
+    phone = ClientPhone.objects.create(client=foreign_client, number='+70000000001', is_primary=True)
 
     api = _api_for(seller1)
-    response = api.patch(f'{CLIENT_PHONES_URL}{phone.pk}/', {'client': foreign_client.pk})
+    response = api.patch(f'{CLIENT_PHONES_URL}{phone.pk}/', {'number': '+70000000099'})
 
-    assert response.status_code == 403
+    assert response.status_code == 200, response.data
     phone.refresh_from_db()
-    assert phone.client == own_client
+    assert phone.number == '+70000000099'
 
 
 @pytest.mark.django_db
