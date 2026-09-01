@@ -23,18 +23,16 @@ Django 6.1 + DRF + Postgres 17 · React 19 + Vite + nginx.
 5. `docker compose -f docker-compose.prod.yml exec backend python manage.py seed_references`
 6. `docker compose -f docker-compose.prod.yml exec backend python manage.py create_manager --username ... --email ... --password ...`
 
-UI по умолчанию: http://сервер:80 (`VITE_API_URL=/api/v1` зашит в `frontend/Dockerfile.prod`).
+UI: https://ваш.домен (`VITE_API_URL=/api/v1` зашит в `frontend/Dockerfile.prod`). Caddy в `docker-compose.prod.yml` берёт 80/443 и выпускает Let's Encrypt.
 
 Не запускать `load_mock_data` в проде (`DEBUG=False` — команда откажется).
 
 ### HTTPS
 
-TLS ставить на **вашем** reverse proxy (Cloudflare, nginx, и т.п.), не внутри этого Compose.
+Caddy в том же Compose терминирует TLS и проксирует на `frontend:80`. В `Caddyfile` укажите домен(ы), DNS A-запись должна смотреть на VPS.
 
-- Оставить `docker-compose.prod.yml` как есть.
-- Проксировать на контейнер `frontend:80`.
-- Слать заголовок `X-Forwarded-Proto: https` (nginx внутри стека пробрасывает его в Django).
 - В `.env`: `SECURE_SSL_REDIRECT=False` (`docker-compose.prod.yml` уже задаёт это для backend).
+- Cloudflare оранжевое облако ломает HTTP-01 Let's Encrypt — либо серое облако, либо TLS на стороне Cloudflare вместо Caddy.
 
 ## Резервное копирование
 

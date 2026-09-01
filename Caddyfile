@@ -1,0 +1,8 @@
+{
+	email admin@domcrm.space
+}
+
+domcrm.space, www.domcrm.space {
+	encode gzip
+	reverse_proxy frontend:80
+}

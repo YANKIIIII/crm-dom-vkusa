@@ -35,7 +35,7 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
-    # No host port — traffic enters via frontend/nginx.
+    # No host port — traffic enters via Caddy → frontend nginx.
 
   frontend:
     build:
@@ -43,11 +43,25 @@ services:
       dockerfile: Dockerfile.prod
       args:
         VITE_API_URL: /api/v1
-    ports:
-      - "80:80"
     depends_on:
       - backend
     restart: unless-stopped
 
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
 volumes:
   postgres_data_prod:
+  caddy_data:
+  caddy_config:
