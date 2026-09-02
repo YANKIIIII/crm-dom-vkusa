@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/v1/common/', include('common.urls')),
     path('api/v1/analytics/', include('analytics.urls')),
     path('api/v1/tasks/', include('tasks.urls')),
+    path('api/v1/personnel/', include('personnel.urls')),
     path(
         'api/schema/',
         SpectacularAPIView.as_view(permission_classes=[IsAuthenticated]),

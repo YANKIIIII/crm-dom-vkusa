@@ -76,6 +76,20 @@ def effective_month(user, year, month):
     }
 
 
+def month_with_pay(user, year, month):
+    data = dict(effective_month(user, year, month))
+    sales = sales_total_for(user, year, month)
+    data['sales_total'] = sales
+    data['pay_total'] = compute_pay(
+        hours=data['hours'],
+        hourly_rate=data['hourly_rate'],
+        commission_percent=data['commission_percent'],
+        sales_total=sales,
+        bonus=data['bonus'],
+    )
+    return data
+
+
 def leaves_intersecting_month(year, month):
     first = date(year, month, 1)
     last = date(year, month, monthrange(year, month)[1])
