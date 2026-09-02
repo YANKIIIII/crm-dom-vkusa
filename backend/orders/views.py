@@ -5,6 +5,7 @@ from django.db.models import Sum
 from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
+import django_filters
 from common.audit import write_audit
 from common.permissions import HasAnyModule, HasModule, HasModuleOrReadOnly
 from clients.services import ClientService
@@ -33,6 +34,16 @@ from .serializers import (
     DeliveryServiceSerializer,
 )
 
+
+class OrderFilter(django_filters.FilterSet):
+    order_date_after = django_filters.DateFilter(field_name='order_date', lookup_expr='gte')
+    order_date_before = django_filters.DateFilter(field_name='order_date', lookup_expr='lte')
+
+    class Meta:
+        model = Order
+        fields = ['status', 'seller', 'sales_channel', 'client']
+
+
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.select_related(
         'seller', 'sales_channel', 'client', 'delivery_service'
@@ -43,7 +54,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     ).order_by('-id')
     serializer_class = OrderSerializer
     permission_classes = [HasModule('orders')]
-    filterset_fields = ['status', 'seller', 'sales_channel', 'client']
+    filterset_class = OrderFilter
     search_fields = [
         'order_number', 'tracking_number', 'client__first_name', 'client__last_name', 'client__email', 'client__phones__number',
         'items__product_card__name', 'items__product_card__sku', 'items__product_card__category__name', 'items__product_card__supplier__name',

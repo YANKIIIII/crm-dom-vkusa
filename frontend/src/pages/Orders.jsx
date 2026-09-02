@@ -11,9 +11,11 @@ import { useFeedback } from '../hooks/useFeedback';
 import {
   PAGE_SIZE, PAGE_SIZE_OPTIONS, formatCurrency, formatDate, extractApiError,
   toggleOrdering, buildListQuery, CATALOG_PAGE_SIZE, mapOrderStatuses, unwrapList,
+  toRangeQuery, rangeInputFromQuery,
 } from '../utils';
 import SortableHeader from '../components/SortableHeader';
 import SearchableSelect from '../components/SearchableSelect';
+import CompareFilter from '../components/CompareFilter';
 import TruncatedText from '../components/TruncatedText';
 
 const isDeletableStatus = (status, statuses) => {
@@ -31,6 +33,10 @@ const Orders = () => {
   const urlSearch = searchParams.get('search') ?? '';
   const urlView = searchParams.get('view') === 'unassigned' ? 'unassigned' : 'all';
   const urlStatus = searchParams.get('status') ?? '';
+  const urlDateAfter = searchParams.get('order_date_after') ?? '';
+  const urlDateBefore = searchParams.get('order_date_before') ?? '';
+  const urlDateOp = searchParams.get('date_op') ?? '';
+  const dateRange = rangeInputFromQuery(urlDateAfter, urlDateBefore, urlDateOp);
   const urlOrdering = searchParams.get('ordering') || '-id';
   const urlPage1Based = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
   const urlPageSize = PAGE_SIZE_OPTIONS.includes(Number(searchParams.get('page_size')))
@@ -77,7 +83,11 @@ const Orders = () => {
             pageSize: urlPageSize,
             search: urlSearch,
             ordering: urlOrdering,
-            extra: { status: effectiveStatus },
+            extra: {
+              status: effectiveStatus,
+              order_date_after: urlDateAfter,
+              order_date_before: urlDateBefore,
+            },
           })}`
         );
         if (cancelled) return;
@@ -98,7 +108,7 @@ const Orders = () => {
     return () => {
       cancelled = true;
     };
-  }, [urlSearch, urlPage1Based, urlPageSize, urlOrdering, effectiveStatus, notify]);
+  }, [urlSearch, urlPage1Based, urlPageSize, urlOrdering, effectiveStatus, urlDateAfter, urlDateBefore, notify]);
 
   const updateUrl = (next) => {
     const params = new URLSearchParams();
@@ -110,6 +120,12 @@ const Orders = () => {
     if (view === 'unassigned') params.set('view', 'unassigned');
     const status = next.status === undefined ? urlStatus : next.status;
     if (view !== 'unassigned' && status) params.set('status', status);
+    const dateAfter = next.dateAfter === undefined ? urlDateAfter : next.dateAfter;
+    const dateBefore = next.dateBefore === undefined ? urlDateBefore : next.dateBefore;
+    const dateOp = next.dateOp === undefined ? urlDateOp : next.dateOp;
+    if (dateOp) params.set('date_op', dateOp);
+    if (dateAfter) params.set('order_date_after', dateAfter);
+    if (dateBefore) params.set('order_date_before', dateBefore);
     setSearchParams(params);
   };
 
@@ -189,7 +205,11 @@ const Orders = () => {
             pageSize: urlPageSize,
             search: urlSearch,
             ordering: urlOrdering,
-            extra: { status: effectiveStatus },
+            extra: {
+              status: effectiveStatus,
+              order_date_after: urlDateAfter,
+              order_date_before: urlDateBefore,
+            },
           })}`
       );
       setOrders(response.data.results || response.data);
@@ -233,18 +253,18 @@ const Orders = () => {
           <Tab value="all" label="Все заказы" />
           <Tab value="unassigned" label="Нераспределённые" />
         </Tabs>
-        <Box sx={{ p: 3, display: 'flex', gap: 2, alignItems: 'center', borderBottom: '1px solid #EDF2F7' }}>
+        <Box sx={{ px: 2, py: 1.5, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid #EDF2F7' }}>
           <TextField
             placeholder="Поиск…"
             size="small"
-            sx={{ width: 300 }}
+            sx={{ width: 160, flex: '0 0 160px' }}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             slotProps={{ input: { 'aria-label': 'Поиск заказов' } }}
           />
           {urlView !== 'unassigned' && (
-          <Box sx={{ minWidth: 200 }}>
+          <Box sx={{ minWidth: 140, flex: '0 1 160px' }}>
             <SearchableSelect
               id="orders-status-filter"
               label="Статус"
@@ -257,6 +277,38 @@ const Orders = () => {
             />
           </Box>
           )}
+          <CompareFilter
+            id="orders-date"
+            label="Дата заказа"
+            type="date"
+            op={dateRange.op}
+            onOpChange={(next) => {
+              if (!next) {
+                updateUrl({ search: urlSearch, page0Based: 0, dateOp: '', dateAfter: '', dateBefore: '' });
+                return;
+              }
+              const range = toRangeQuery(next, dateRange.from, next === 'between' ? dateRange.to : '');
+              updateUrl({
+                search: urlSearch,
+                page0Based: 0,
+                dateOp: next,
+                dateAfter: range.min,
+                dateBefore: range.max,
+              });
+            }}
+            value={dateRange.from}
+            valueTo={dateRange.to}
+            onRangeChange={(from, to) => {
+              const range = toRangeQuery(dateRange.op, from, to);
+              updateUrl({
+                search: urlSearch,
+                page0Based: 0,
+                dateOp: dateRange.op,
+                dateAfter: range.min,
+                dateBefore: range.max,
+              });
+            }}
+          />
           <Box sx={{ flexGrow: 1 }} />
           {isManager && selectedIds.size > 0 && (
             <Button

@@ -2,7 +2,7 @@ import { Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell,
 import { useEffect, useState } from 'react';
 import api from '../api';
 import { useFeedback } from '../hooks/useFeedback';
-import { extractApiError, formatCurrency, PAGE_SIZE, PAGE_SIZE_OPTIONS, toggleOrdering, buildListQuery } from '../utils';
+import { extractApiError, formatCurrency, PAGE_SIZE, PAGE_SIZE_OPTIONS, toggleOrdering, buildListQuery, toRangeQuery } from '../utils';
 import SortableHeader from '../components/SortableHeader';
 import SearchableSelect from '../components/SearchableSelect';
 import TruncatedText from '../components/TruncatedText';
@@ -97,14 +97,6 @@ const getTagChipSx = (tag) => {
     return { bgcolor: '#FED7D7', color: '#E53E3E' };
   }
   return { bgcolor: '#EDF2F7', color: '#4A5568' };
-};
-
-const toRangeQuery = (op, from, to) => {
-  if (!op) return { min: '', max: '' };
-  if (op === 'gte') return { min: from, max: '' };
-  if (op === 'lte') return { min: '', max: from };
-  if (op === 'between') return { min: from, max: to };
-  return { min: '', max: '' };
 };
 
 const Warehouse = () => {

@@ -132,6 +132,24 @@ export function buildListQuery({ page, pageSize, search, ordering, extra = {} })
   return params.toString();
 }
 
+export function toRangeQuery(op, from, to) {
+  if (!op) return { min: '', max: '' };
+  if (op === 'gte') return { min: from, max: '' };
+  if (op === 'lte') return { min: '', max: from };
+  if (op === 'between') return { min: from, max: to };
+  return { min: '', max: '' };
+}
+
+export function rangeInputFromQuery(min, max, op = '') {
+  if (op === 'between') return { op, from: min || '', to: max || '' };
+  if (op === 'lte') return { op, from: max || min || '', to: '' };
+  if (op === 'gte') return { op, from: min || '', to: '' };
+  if (min && max) return { op: 'between', from: min, to: max };
+  if (min) return { op: 'gte', from: min, to: '' };
+  if (max) return { op: 'lte', from: max, to: '' };
+  return { op: '', from: '', to: '' };
+}
+
 // Builds a readable message from a DRF error response:
 // {"detail": "..."}, {"non_field_errors": [...]}, field errors
 // like {"status": ["..."]}, or a bare list of messages.

@@ -1,4 +1,5 @@
 import pytest
+from datetime import date
 from django.utils import timezone
 from rest_framework.test import APIClient
 from orders.models import Order, SalesChannel
@@ -597,3 +598,37 @@ def test_order_seller_name_is_last_and_first():
     response = api.get(f'/api/v1/orders/orders/{order.pk}/')
     assert response.status_code == 200, response.data
     assert response.data['seller_name'] == 'Петров Иван'
+
+
+@pytest.mark.django_db
+def test_order_list_filters_by_order_date():
+    user = User.objects.create_user(
+        username='odate', email='odate@test.com', password='pwd', role='manager',
+    )
+    channel = SalesChannel.objects.create(name='Сайт')
+    august = Order.objects.create(
+        order_number=301, order_date=date(2026, 8, 12), status=Order.Status.RESERVED,
+        seller=user, sales_channel=channel, created_by=user,
+    )
+    january = Order.objects.create(
+        order_number=302, order_date=date(2026, 1, 10), status=Order.Status.RESERVED,
+        seller=user, sales_channel=channel, created_by=user,
+    )
+    api = APIClient()
+    api.force_authenticate(user=user)
+
+    by_range = api.get('/api/v1/orders/orders/', {
+        'order_date_after': '2026-08-01',
+        'order_date_before': '2026-08-31',
+    })
+    assert by_range.status_code == 200
+    ids = [row['id'] for row in by_range.data['results']]
+    assert august.pk in ids
+    assert january.pk not in ids
+
+    by_from = api.get('/api/v1/orders/orders/', {'order_date_after': '2026-08-01'})
+    assert by_from.status_code == 200
+    from_ids = [row['id'] for row in by_from.data['results']]
+    assert august.pk in from_ids
+    assert january.pk not in from_ids
+

@@ -10,9 +10,11 @@ import { useFeedback } from '../hooks/useFeedback';
 import {
   PAGE_SIZE, PAGE_SIZE_OPTIONS, formatCurrency, formatDate, extractApiError,
   toggleOrdering, buildListQuery, CATALOG_PAGE_SIZE, unwrapList, GRILL_TYPE_LABELS,
+  toRangeQuery, rangeInputFromQuery,
 } from '../utils';
 import SortableHeader from '../components/SortableHeader';
 import SearchableSelect from '../components/SearchableSelect';
+import CompareFilter from '../components/CompareFilter';
 import TruncatedText from '../components/TruncatedText';
 
 const GRILL_TYPE_FILTERS = [
@@ -36,6 +38,8 @@ const Clients = () => {
   const urlChannel = searchParams.get('acquisition_source') ?? '';
   const urlPurchaseAfter = searchParams.get('last_purchase_after') ?? '';
   const urlPurchaseBefore = searchParams.get('last_purchase_before') ?? '';
+  const urlPurchaseOp = searchParams.get('purchase_op') ?? '';
+  const purchaseRange = rangeInputFromQuery(urlPurchaseAfter, urlPurchaseBefore, urlPurchaseOp);
   const page = urlPage1Based - 1;
 
   const [searchInput, setSearchInput] = useState(urlSearch);
@@ -114,8 +118,10 @@ const Clients = () => {
     const channel = next.channel === undefined ? urlChannel : next.channel;
     const purchaseAfter = next.purchaseAfter === undefined ? urlPurchaseAfter : next.purchaseAfter;
     const purchaseBefore = next.purchaseBefore === undefined ? urlPurchaseBefore : next.purchaseBefore;
+    const purchaseOp = next.purchaseOp === undefined ? urlPurchaseOp : next.purchaseOp;
     if (grillType) params.set('grill_type', grillType);
     if (channel) params.set('acquisition_source', channel);
+    if (purchaseOp) params.set('purchase_op', purchaseOp);
     if (purchaseAfter) params.set('last_purchase_after', purchaseAfter);
     if (purchaseBefore) params.set('last_purchase_before', purchaseBefore);
     setSearchParams(params);
@@ -226,17 +232,17 @@ const Clients = () => {
       <Typography variant="h4" sx={{ mb: 4 }}>Клиенты</Typography>
 
       <Paper sx={{ p: 0, overflow: 'hidden' }}>
-        <Box sx={{ p: 3, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid #EDF2F7' }}>
+        <Box sx={{ px: 2, py: 1.5, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid #EDF2F7' }}>
           <TextField
             placeholder="Поиск…"
             size="small"
-            sx={{ width: 240 }}
+            sx={{ width: 160, flex: '0 0 160px' }}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             slotProps={{ input: { 'aria-label': 'Поиск клиентов' } }}
           />
-          <Box sx={{ minWidth: 180 }}>
+          <Box sx={{ minWidth: 140, flex: '0 1 160px' }}>
             <SearchableSelect
               id="clients-grill-filter"
               label="Тип гриля"
@@ -245,7 +251,7 @@ const Clients = () => {
               options={GRILL_TYPE_FILTERS}
             />
           </Box>
-          <Box sx={{ minWidth: 200 }}>
+          <Box sx={{ minWidth: 180, flex: '0 1 180px' }}>
             <SearchableSelect
               id="clients-channel-filter"
               label="Канал продажи"
@@ -257,23 +263,37 @@ const Clients = () => {
               ]}
             />
           </Box>
-          <TextField
-            size="small"
+          <CompareFilter
+            id="clients-purchase"
+            label="Покупка"
             type="date"
-            label="Покупка с"
-            value={urlPurchaseAfter}
-            onChange={(e) => updateUrl({ search: urlSearch, page0Based: 0, purchaseAfter: e.target.value })}
-            sx={{ width: 170, minWidth: 170, flexShrink: 0 }}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          <TextField
-            size="small"
-            type="date"
-            label="Покупка по"
-            value={urlPurchaseBefore}
-            onChange={(e) => updateUrl({ search: urlSearch, page0Based: 0, purchaseBefore: e.target.value })}
-            sx={{ width: 170, minWidth: 170, flexShrink: 0 }}
-            slotProps={{ inputLabel: { shrink: true } }}
+            op={purchaseRange.op}
+            onOpChange={(next) => {
+              if (!next) {
+                updateUrl({ search: urlSearch, page0Based: 0, purchaseOp: '', purchaseAfter: '', purchaseBefore: '' });
+                return;
+              }
+              const range = toRangeQuery(next, purchaseRange.from, next === 'between' ? purchaseRange.to : '');
+              updateUrl({
+                search: urlSearch,
+                page0Based: 0,
+                purchaseOp: next,
+                purchaseAfter: range.min,
+                purchaseBefore: range.max,
+              });
+            }}
+            value={purchaseRange.from}
+            valueTo={purchaseRange.to}
+            onRangeChange={(from, to) => {
+              const range = toRangeQuery(purchaseRange.op, from, to);
+              updateUrl({
+                search: urlSearch,
+                page0Based: 0,
+                purchaseOp: purchaseRange.op,
+                purchaseAfter: range.min,
+                purchaseBefore: range.max,
+              });
+            }}
           />
           <Box sx={{ flexGrow: 1 }} />
           {isManager && selectedIds.size > 0 && (

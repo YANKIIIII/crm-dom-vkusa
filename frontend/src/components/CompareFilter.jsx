@@ -57,6 +57,7 @@ const CompareFilter = ({
   onValueChange,
   valueTo,
   onValueToChange,
+  onRangeChange,
   type = 'text',
 }) => {
   const [focused, setFocused] = useState(false);
@@ -245,8 +246,11 @@ const CompareFilter = ({
           value={value}
           valueTo={valueTo}
           onSelect={(from, to) => {
-            onValueChange(from);
-            onValueToChange(to);
+            if (onRangeChange) onRangeChange(from, to);
+            else {
+              onValueChange?.(from);
+              onValueToChange?.(to);
+            }
             if (!showSecond || (from && to)) setCalendarOpen(false);
           }}
         />
