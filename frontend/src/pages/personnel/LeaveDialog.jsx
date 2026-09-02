@@ -1,5 +1,5 @@
 import {
-  Alert, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, TextField,
+  Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import api from '../../api';
