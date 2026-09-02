@@ -2,6 +2,8 @@ import pytest
 from django.core.management import call_command
 from django.urls import reverse
 from rest_framework.test import APIClient
+
+from common.models import AuditLog
 from users.models import User
 
 @pytest.mark.django_db
@@ -47,6 +49,9 @@ def test_user_update_rehashes_password():
     client = APIClient()
     manager = User.objects.create_user(username='mgr3', email='mgr3@test.com', password='pwd', role='manager')
     target = User.objects.create_user(username='target', email='t@test.com', password='oldpass', role='seller')
+    login = client.post('/api/v1/token/', {'username': 'target', 'password': 'oldpass'})
+    assert login.status_code == 200
+    refresh = login.data['refresh']
     client.force_authenticate(user=manager)
 
     response = client.patch(f'/api/v1/users/users/{target.pk}/', {'password': 'newpass123'})
@@ -55,6 +60,14 @@ def test_user_update_rehashes_password():
     target.refresh_from_db()
     assert target.check_password('newpass123')
     assert not target.check_password('oldpass')
+
+    reused = client.post('/api/v1/token/refresh/', {'refresh': refresh})
+    assert reused.status_code in (400, 401)
+
+    client.force_authenticate(user=None)
+    client.credentials(HTTP_AUTHORIZATION=f'Bearer {login.data["access"]}')
+    denied = client.get('/api/v1/users/users/me/')
+    assert denied.status_code in (401, 403)
 
 
 @pytest.mark.django_db
@@ -73,7 +86,6 @@ def test_login_writes_audit_log():
     client = APIClient()
     response = client.post('/api/v1/token/', {'username': 'loginuser', 'password': 'pwd'})
     assert response.status_code == 200
-    from common.models import AuditLog
     assert AuditLog.objects.filter(action='LOGIN', entity_type='user').exists()
     log = AuditLog.objects.filter(action='LOGIN', entity_type='user').latest('id')
     assert log.details['status'] == 'success'
@@ -85,7 +97,6 @@ def test_failed_login_writes_audit_log():
     client = APIClient()
     response = client.post('/api/v1/token/', {'username': 'badlogin', 'password': 'wrong'})
     assert response.status_code == 401
-    from common.models import AuditLog
     log = AuditLog.objects.get(action='LOGIN', entity_id=user.pk)
     assert log.details['status'] == 'failure'
     assert log.user_id == user.pk
@@ -96,7 +107,6 @@ def test_unknown_user_failed_login_writes_audit_log():
     client = APIClient()
     response = client.post('/api/v1/token/', {'username': 'ghost', 'password': 'wrong'})
     assert response.status_code == 401
-    from common.models import AuditLog
     log = AuditLog.objects.get(action='LOGIN', entity_type='user', entity_id=0)
     assert log.user_id is None
     assert log.details['status'] == 'failure'
@@ -157,8 +167,30 @@ def test_logout_blacklists_refresh_token():
     reused = client.post('/api/v1/token/refresh/', {'refresh': refresh})
     assert reused.status_code in (400, 401)
 
-    from common.models import AuditLog
     assert AuditLog.objects.filter(action='LOGOUT', entity_type='user').exists()
+
+
+@pytest.mark.django_db
+def test_refresh_rotates_and_rejects_old_token():
+    User.objects.create_user(username='rotuser', email='rot@test.com', password='pwd', role='seller')
+    client = APIClient()
+    login = client.post('/api/v1/token/', {'username': 'rotuser', 'password': 'pwd'})
+    assert login.status_code == 200
+    old_refresh = login.data['refresh']
+
+    rotated = client.post('/api/v1/token/refresh/', {'refresh': old_refresh})
+    assert rotated.status_code == 200
+    assert rotated.data.get('access')
+    new_refresh = rotated.data.get('refresh')
+    assert new_refresh
+    assert new_refresh != old_refresh
+
+    reused = client.post('/api/v1/token/refresh/', {'refresh': old_refresh})
+    assert reused.status_code in (400, 401)
+
+    second = client.post('/api/v1/token/refresh/', {'refresh': new_refresh})
+    assert second.status_code == 200
+    assert second.data.get('access')
 
 
 @pytest.mark.django_db
@@ -194,3 +226,128 @@ def test_create_manager_is_idempotent():
     assert User.objects.filter(username='boss').count() == 1
     assert user.role == 'seller'
     assert user.check_password('oldpass')
+
+
+@pytest.mark.django_db
+def test_seller_can_change_own_password_via_me():
+    seller = User.objects.create_user(
+        username='me_pwd', email='mep@test.com', password='oldpass', role='seller',
+    )
+    api = APIClient()
+    login = api.post('/api/v1/token/', {'username': 'me_pwd', 'password': 'oldpass'})
+    assert login.status_code == 200
+    refresh = login.data['refresh']
+    api.credentials(HTTP_AUTHORIZATION=f'Bearer {login.data["access"]}')
+
+    missing = api.patch('/api/v1/users/users/me/', {'password': 'Newpass123'})
+    assert missing.status_code == 400
+
+    wrong = api.patch('/api/v1/users/users/me/', {
+        'password': 'Newpass123', 'current_password': 'nope',
+    })
+    assert wrong.status_code == 400
+    seller.refresh_from_db()
+    assert seller.check_password('oldpass')
+
+    response = api.patch('/api/v1/users/users/me/', {
+        'password': 'Newpass123', 'current_password': 'oldpass',
+    })
+    assert response.status_code == 200, response.data
+    seller.refresh_from_db()
+    assert seller.check_password('Newpass123')
+    assert not seller.check_password('oldpass')
+
+    reused = api.post('/api/v1/token/refresh/', {'refresh': refresh})
+    assert reused.status_code in (400, 401)
+
+    still_access = api.get('/api/v1/users/users/me/')
+    assert still_access.status_code in (401, 403)
+
+
+@pytest.mark.django_db
+def test_seller_cannot_change_role_via_me():
+    seller = User.objects.create_user(
+        username='me_role', email='mer@test.com', password='pwd', role='seller',
+    )
+    api = APIClient()
+    api.force_authenticate(user=seller)
+    response = api.patch('/api/v1/users/users/me/', {'role': 'manager'})
+    assert response.status_code == 400
+    seller.refresh_from_db()
+    assert seller.role == 'seller'
+
+
+@pytest.mark.django_db
+def test_manager_cannot_deactivate_self():
+    manager = User.objects.create_user(
+        username='mgr_self', email='mself@test.com', password='pwd', role='manager',
+    )
+    api = APIClient()
+    api.force_authenticate(user=manager)
+    response = api.patch(f'/api/v1/users/users/{manager.pk}/', {'is_active': False})
+    assert response.status_code == 400
+    manager.refresh_from_db()
+    assert manager.is_active is True
+
+
+@pytest.mark.django_db
+def test_deactivated_user_access_token_is_rejected():
+    manager = User.objects.create_user(
+        username='mgr_off', email='moff@test.com', password='pwd', role='manager',
+    )
+    seller = User.objects.create_user(
+        username='sel_off', email='soff@test.com', password='pwd', role='seller',
+    )
+    api = APIClient()
+    login = api.post('/api/v1/token/', {'username': 'sel_off', 'password': 'pwd'})
+    assert login.status_code == 200
+    api.force_authenticate(user=manager)
+    off = api.patch(f'/api/v1/users/users/{seller.pk}/', {'is_active': False})
+    assert off.status_code == 200, off.data
+    api.force_authenticate(user=None)
+    api.credentials(HTTP_AUTHORIZATION=f'Bearer {login.data["access"]}')
+    denied = api.get('/api/v1/users/users/me/')
+    assert denied.status_code in (401, 403)
+
+
+@pytest.mark.django_db
+def test_manager_can_deactivate_other_user():
+    manager = User.objects.create_user(
+        username='mgr_act', email='mact@test.com', password='pwd', role='manager',
+    )
+    seller = User.objects.create_user(
+        username='sel_act', email='sact@test.com', password='pwd', role='seller',
+    )
+    api = APIClient()
+    api.force_authenticate(user=manager)
+    response = api.patch(f'/api/v1/users/users/{seller.pk}/', {'is_active': False})
+    assert response.status_code == 200, response.data
+    seller.refresh_from_db()
+    assert seller.is_active is False
+
+
+@pytest.mark.django_db
+def test_login_throttle_is_per_forwarded_client_ip(settings):
+    settings.REST_FRAMEWORK = {**settings.REST_FRAMEWORK, 'NUM_PROXIES': 2}
+    User.objects.create_user(username='thr_a', email='tha@test.com', password='pwd', role='seller')
+    User.objects.create_user(username='thr_b', email='thb@test.com', password='pwd', role='seller')
+    api = APIClient()
+    for _ in range(5):
+        response = api.post(
+            '/api/v1/token/',
+            {'username': 'thr_a', 'password': 'wrong'},
+            HTTP_X_FORWARDED_FOR='10.0.0.1, 172.18.0.10',
+        )
+        assert response.status_code == 401, response.data
+    blocked = api.post(
+        '/api/v1/token/',
+        {'username': 'thr_a', 'password': 'wrong'},
+        HTTP_X_FORWARDED_FOR='10.0.0.1, 172.18.0.10',
+    )
+    assert blocked.status_code == 429
+    other_ip = api.post(
+        '/api/v1/token/',
+        {'username': 'thr_b', 'password': 'wrong'},
+        HTTP_X_FORWARDED_FOR='10.0.0.2, 172.18.0.10',
+    )
+    assert other_ip.status_code == 401, other_ip.data

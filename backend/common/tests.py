@@ -3,7 +3,7 @@ from django.core.management import call_command
 from rest_framework.test import APIClient
 from catalog.models import ProductCard, ProductCategory, Supplier
 from common.models import AuditLog
-from orders.models import DeliveryService, PaymentType, SalesChannel
+from orders.models import DeliveryService, OrderStatus, PaymentType, SalesChannel
 from users.models import User
 from warehouse.models import StockItem
 
@@ -52,6 +52,8 @@ def test_seed_references_creates_tz_dictionaries():
     assert SalesChannel.objects.filter(name='Салон (офлайн)').exists()
     assert PaymentType.objects.filter(name='Наличные').exists()
     assert DeliveryService.objects.filter(name='Европочта').exists()
+    assert OrderStatus.objects.filter(code='reserved', is_system=True).exists()
+    assert OrderStatus.objects.filter(code='completed', kind='completed').exists()
 
 
 @pytest.mark.django_db
@@ -62,3 +64,4 @@ def test_seed_references_is_idempotent():
     assert SalesChannel.objects.filter(name='Сайт').count() == 1
     assert PaymentType.objects.filter(name='Рассрочка').count() == 1
     assert DeliveryService.objects.filter(name='Самовывоз').count() == 1
+    assert OrderStatus.objects.filter(code='reserved').count() == 1

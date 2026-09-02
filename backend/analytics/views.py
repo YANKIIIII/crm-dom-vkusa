@@ -7,8 +7,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from common.permissions import IsManager
-from orders.models import Order, OrderItem
+from common.permissions import HasModule
+from orders.models import Order, OrderItem, status_label, completed_order_status_codes
 from warehouse.models import StockItem
 from clients.models import Client
 
@@ -38,7 +38,7 @@ def _parse_date(value, field):
 
 
 class SalesAnalyticsView(APIView):
-    permission_classes = [IsManager]
+    permission_classes = [HasModule('analytics')]
 
     def get(self, request):
         date_from = _parse_date(request.query_params.get('date_from'), 'date_from')
@@ -46,8 +46,9 @@ class SalesAnalyticsView(APIView):
         if date_from and date_to and date_from > date_to:
             raise ValidationError({'date_from': 'date_from не может быть позже date_to.'})
 
-        completed_orders = Order.objects.filter(status=Order.Status.COMPLETED)
-        completed_items = OrderItem.objects.filter(order__status=Order.Status.COMPLETED)
+        completed_codes = completed_order_status_codes()
+        completed_orders = Order.objects.filter(status__in=completed_codes)
+        completed_items = OrderItem.objects.filter(order__status__in=completed_codes)
         if date_from:
             completed_orders = completed_orders.filter(order_date__gte=date_from)
             completed_items = completed_items.filter(order__order_date__gte=date_from)
@@ -73,11 +74,10 @@ class SalesAnalyticsView(APIView):
             (gross_profit / total_cost * Decimal('100')) if total_cost else Decimal('0')
         )
 
-        status_map = {choice[0]: choice[1] for choice in Order.Status.choices}
         orders_by_status = [
             {
                 'status_code': item['status'],
-                'name': status_map.get(item['status'], item['status']),
+                'name': status_label(item['status']),
                 'count': item['count'],
             }
             for item in Order.objects.values('status').annotate(count=Count('id'))

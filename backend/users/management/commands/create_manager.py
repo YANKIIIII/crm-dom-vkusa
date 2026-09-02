@@ -26,5 +26,6 @@ class Command(BaseCommand):
             first_name=options['first_name'],
             last_name=options['last_name'],
             role=User.Role.MANAGER,
+            job_title='Руководитель',
         )
         self.stdout.write(self.style.SUCCESS(f'Руководитель {username} создан.'))

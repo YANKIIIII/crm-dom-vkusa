@@ -1,6 +1,6 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from .models import Order
+from .models import Order, is_cancelled_status, is_completed_status
 from clients.services import ClientService
 from django.utils.timezone import now
 
@@ -40,11 +40,11 @@ def order_post_save(sender, instance, created, **kwargs):
                     'new': {'status': instance.status},
                 }
             )
-            if instance.status == 'completed' and old_status != 'completed':
+            if is_completed_status(instance.status) and not is_completed_status(old_status):
                 instance.completed_at = now()
                 Order.objects.filter(pk=instance.pk).update(completed_at=instance.completed_at)
                 ClientService.update_budget_on_completion(instance)
-            elif instance.status == 'cancelled' and old_status != 'cancelled':
+            elif is_cancelled_status(instance.status) and not is_cancelled_status(old_status):
                 ClientService.update_budget_on_completion(instance)
 
 

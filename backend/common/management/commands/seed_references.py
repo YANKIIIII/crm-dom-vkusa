@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from catalog.models import ProductCategory
-from orders.models import DeliveryService, PaymentType, SalesChannel
+from orders.models import DeliveryService, OrderStatus, PaymentType, SalesChannel
 
 CATEGORIES = [
     ('A', 'Грили'),
@@ -22,10 +22,17 @@ PAYMENTS = [
     'Рассрочка',
 ]
 DELIVERIES = ['Самовывоз', 'Курьер', 'Европочта']
+ORDER_STATUSES = [
+    ('reserved', 'Резерв', OrderStatus.Kind.OPEN, 10),
+    ('confirmed', 'Подтвержден', OrderStatus.Kind.OPEN, 20),
+    ('in_delivery', 'В доставке', OrderStatus.Kind.OPEN, 30),
+    ('completed', 'Завершен', OrderStatus.Kind.COMPLETED, 40),
+    ('cancelled', 'Отменен', OrderStatus.Kind.CANCELLED, 50),
+]
 
 
 class Command(BaseCommand):
-    help = 'Идемпотентно создать справочники категорий, каналов, оплат и доставки.'
+    help = 'Идемпотентно создать справочники категорий, каналов, оплат, доставки и статусов.'
 
     def handle(self, *args, **options):
         for code, name in CATEGORIES:
@@ -36,4 +43,14 @@ class Command(BaseCommand):
             PaymentType.objects.get_or_create(name=name)
         for name in DELIVERIES:
             DeliveryService.objects.get_or_create(name=name)
+        for code, name, kind, sort_order in ORDER_STATUSES:
+            OrderStatus.objects.get_or_create(
+                code=code,
+                defaults={
+                    'name': name,
+                    'kind': kind,
+                    'sort_order': sort_order,
+                    'is_system': True,
+                },
+            )
         self.stdout.write(self.style.SUCCESS('Справочники готовы.'))

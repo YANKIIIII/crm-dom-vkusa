@@ -1,6 +1,6 @@
 from django.db import transaction
 from rest_framework import status, viewsets
-from rest_framework.permissions import IsAuthenticated
+from common.permissions import HasModule
 from rest_framework.response import Response
 import django_filters
 from common.audit import write_audit
@@ -25,7 +25,7 @@ class StockItemViewSet(viewsets.ModelViewSet):
         'product_card', 'product_card__category', 'product_card__supplier'
     ).order_by('id')
     serializer_class = StockItemSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasModule('warehouse')]
     filterset_class = StockItemFilter
     search_fields = ['product_card__name', 'product_card__sku', 'product_card__category__name', 'product_card__supplier__name']
     ordering_fields = [

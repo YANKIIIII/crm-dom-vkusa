@@ -494,3 +494,106 @@ def test_order_item_includes_product_preview_fields():
     assert response.data['product_dimensions'] == '110x70x60'
     assert response.data['product_weight'] == '45.00'
     assert response.data['product_supplier_name'] == 'Weber'
+
+
+@pytest.mark.django_db
+def test_second_reserved_order_cannot_overcommit_stock():
+    user = User.objects.create_user(
+        username='over', email='over@test.com', password='pwd', role='manager',
+    )
+    category = ProductCategory.objects.create(name='Грили')
+    supplier = Supplier.objects.create(name='Weber')
+    product = ProductCard.objects.create(
+        name='Grill', sku='G-OV', category=category, supplier=supplier, base_cost_price=100,
+    )
+    StockItem.objects.create(product_card=product, stock_quantity=5)
+    channel = SalesChannel.objects.create(name='Сайт')
+    first = _make_order(user, channel, number=201)
+    second = _make_order(user, channel, number=202)
+    api = APIClient()
+    api.force_authenticate(user=user)
+
+    ok = api.post(ORDER_ITEMS_URL, {
+        'order': first.pk, 'product_card': product.pk,
+        'quantity': 5, 'cost_price': 100, 'price': 150, 'vat_rate': 20,
+    })
+    assert ok.status_code == 201, ok.data
+
+    blocked = api.post(ORDER_ITEMS_URL, {
+        'order': second.pk, 'product_card': product.pk,
+        'quantity': 5, 'cost_price': 100, 'price': 150, 'vat_rate': 20,
+    })
+    assert blocked.status_code == 400
+    assert second.items.count() == 0
+
+
+@pytest.mark.django_db
+def test_cannot_change_header_of_completed_order():
+    user = User.objects.create_user(
+        username='freeze', email='freeze@test.com', password='pwd', role='manager',
+    )
+    channel = SalesChannel.objects.create(name='Сайт')
+    other = SalesChannel.objects.create(name='Другой')
+    order = _make_order(user, channel, number=203)
+    order.status = Order.Status.COMPLETED
+    order.save(update_fields=['status'])
+    api = APIClient()
+    api.force_authenticate(user=user)
+
+    response = api.patch(f'/api/v1/orders/orders/{order.pk}/', {
+        'discount_percent': '15.00',
+        'sales_channel': other.pk,
+    })
+    assert response.status_code == 400
+    order.refresh_from_db()
+    assert order.discount_percent == 0
+    assert order.sales_channel_id == channel.pk
+
+
+@pytest.mark.django_db
+def test_comment_allowed_on_completed_order():
+    user = User.objects.create_user(
+        username='cmt', email='cmt@test.com', password='pwd', role='manager',
+    )
+    channel = SalesChannel.objects.create(name='Сайт')
+    order = _make_order(user, channel, number=204)
+    order.status = Order.Status.COMPLETED
+    order.save(update_fields=['status'])
+    api = APIClient()
+    api.force_authenticate(user=user)
+
+    response = api.patch(f'/api/v1/orders/orders/{order.pk}/', {'comment': 'ок'})
+    assert response.status_code == 200, response.data
+    order.refresh_from_db()
+    assert order.comment == 'ок'
+
+
+@pytest.mark.django_db
+def test_order_number_assigned_when_omitted():
+    user = User.objects.create_user(
+        username='num', email='num@test.com', password='pwd', role='manager',
+    )
+    channel = SalesChannel.objects.create(name='Сайт')
+    first = Order.objects.create(
+        order_date=timezone.now().date(), seller=user, sales_channel=channel, created_by=user,
+    )
+    second = Order.objects.create(
+        order_date=timezone.now().date(), seller=user, sales_channel=channel, created_by=user,
+    )
+    assert first.order_number >= 1
+    assert second.order_number == first.order_number + 1
+
+
+@pytest.mark.django_db
+def test_order_seller_name_is_last_and_first():
+    user = User.objects.create_user(
+        username='fio', email='fio@test.com', password='pwd', role='manager',
+        first_name='Иван', last_name='Петров',
+    )
+    channel = SalesChannel.objects.create(name='Сайт')
+    order = _make_order(user, channel, number=210)
+    api = APIClient()
+    api.force_authenticate(user=user)
+    response = api.get(f'/api/v1/orders/orders/{order.pk}/')
+    assert response.status_code == 200, response.data
+    assert response.data['seller_name'] == 'Петров Иван'

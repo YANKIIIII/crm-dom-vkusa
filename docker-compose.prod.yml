@@ -31,6 +31,8 @@ services:
       DEBUG: "False"
       # Behind nginx on the same compose network; TLS terminates at the edge.
       SECURE_SSL_REDIRECT: "False"
+      # Caddy → frontend nginx → gunicorn. Login throttle must use the client IP.
+      NUM_PROXIES: "2"
     depends_on:
       db:
         condition: service_healthy

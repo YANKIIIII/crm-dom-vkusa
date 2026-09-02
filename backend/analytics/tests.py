@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 
 from catalog.models import ProductCard, ProductCategory, Supplier
 from clients.models import Client
-from orders.models import Order, OrderItem, SalesChannel
+from orders.models import Order, OrderItem, OrderStatus, SalesChannel
 from users.models import User
 from warehouse.models import StockItem
 
@@ -79,6 +79,47 @@ def test_manager_dashboard_includes_tz_widgets():
     assert data['top_sellers'][0]['deals'] == 1
     assert data['low_stock'][0]['sku'] == 'GX-1'
     assert data['sales_by_supplier'][0]['name'] == 'Weber'
+
+
+@pytest.mark.django_db
+def test_analytics_counts_custom_completed_status():
+    manager = User.objects.create_user(
+        username='a_mgr_custom', email='amc@test.com', password='pwd', role='manager',
+    )
+    seller = User.objects.create_user(
+        username='a_sel_custom', email='asc@test.com', password='pwd', role='seller',
+    )
+    OrderStatus.objects.create(
+        code='sold_salon', name='Продано в салоне',
+        kind=OrderStatus.Kind.COMPLETED, sort_order=45,
+    )
+    category = ProductCategory.objects.create(name='Грили', code='A')
+    supplier = Supplier.objects.create(name='Weber')
+    product = ProductCard.objects.create(
+        name='Grill Z', sku='GZ-1', category=category, supplier=supplier,
+        base_cost_price=100,
+    )
+    channel = SalesChannel.objects.create(name='Салон')
+    today = timezone.now().date()
+    order = Order.objects.create(
+        order_number=701,
+        order_date=today,
+        status='sold_salon',
+        seller=seller,
+        sales_channel=channel,
+        created_by=manager,
+    )
+    OrderItem.objects.create(
+        order=order, product_card=product, quantity=1,
+        cost_price=Decimal('100'), price=Decimal('200'), vat_rate=Decimal('20'),
+    )
+    response = _api_for(manager).get(ANALYTICS_URL, {
+        'date_from': today.isoformat(),
+        'date_to': today.isoformat(),
+    })
+    assert response.status_code == 200, response.data
+    assert response.data['total_completed_orders'] == 1
+    assert Decimal(str(response.data['total_revenue'])) == Decimal('240.00')
 
 
 @pytest.mark.django_db

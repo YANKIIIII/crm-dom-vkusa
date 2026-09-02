@@ -123,3 +123,28 @@ def test_seller_can_delete_stock_item():
     assert response.status_code == 204
     assert not StockItem.objects.filter(pk=stock.pk).exists()
     assert ProductCard.objects.filter(pk=product.pk).exists()
+
+
+@pytest.mark.django_db
+def test_product_cards_filter_by_rrp_max():
+    from decimal import Decimal
+
+    manager = User.objects.create_user(
+        username='pc_price', email='pcp@test.com', password='pwd', role='manager',
+    )
+    category = ProductCategory.objects.create(name='Грили', code='A')
+    supplier = Supplier.objects.create(name='Weber')
+    cheap = ProductCard.objects.create(
+        name='Cheap', sku='CH-1', category=category, supplier=supplier,
+        base_cost_price=50, rrp=Decimal('100.00'),
+    )
+    pricey = ProductCard.objects.create(
+        name='Pricey', sku='PR-1', category=category, supplier=supplier,
+        base_cost_price=200, rrp=Decimal('500.00'),
+    )
+    api = _api_for(manager)
+    response = api.get(PRODUCT_CARDS_URL, {'rrp_max': '200'})
+    assert response.status_code == 200, response.data
+    ids = [row['id'] for row in response.data['results']]
+    assert cheap.pk in ids
+    assert pricey.pk not in ids

@@ -21,6 +21,7 @@ env = environ.Env(
     ALLOWED_HOSTS=(list, []),
     CORS_ALLOWED_ORIGINS=(list, ['http://localhost:5173']),
     USE_SQLITE=(bool, False),
+    NUM_PROXIES=(int, 0),
 )
 
 environ.Env.read_env(BASE_DIR / '.env')
@@ -160,6 +161,8 @@ REST_FRAMEWORK = {
         'user': '5000/hour',
         'login': '5/minute',
     },
+    # 0 = ignore X-Forwarded-For (host pytest). Prod: Caddy + nginx = 2.
+    'NUM_PROXIES': env('NUM_PROXIES'),
 }
 
 SIMPLE_JWT = {
@@ -167,7 +170,9 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'AUTH_HEADER_TYPES': ('Bearer',),
     'UPDATE_LAST_LOGIN': True,
+    'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
+    'CHECK_REVOKE_TOKEN': True,
 }
 
 CORS_ALLOWED_ORIGINS = env('CORS_ALLOWED_ORIGINS')

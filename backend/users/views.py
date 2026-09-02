@@ -9,15 +9,21 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from common.audit import write_audit
-from common.permissions import IsManager
+from common.permissions import HasModule
 from .models import AuthLock, User, UserProfile
 from .serializers import UserSerializer, UserProfileSerializer
 
 LOCKOUT_LIMIT = 5
 LOCKOUT_MINUTES = 15
+
+
+def blacklist_outstanding_tokens(user):
+    for outstanding in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=outstanding)
 
 
 def _auth_details(request, username, result):
@@ -32,14 +38,33 @@ def _auth_details(request, username, result):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.order_by('id')
     serializer_class = UserSerializer
-    permission_classes = [IsManager]
+    permission_classes = [HasModule('users')]
     search_fields = ['username', 'first_name', 'last_name', 'email']
     ordering_fields = ['id', 'username', 'first_name', 'last_name', 'role', 'is_active', 'last_login', 'date_joined']
     ordering = ['id']
 
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
     def me(self, request):
-        serializer = self.get_serializer(request.user)
+        if request.method == 'GET':
+            serializer = self.get_serializer(request.user)
+            return Response(serializer.data)
+
+        extra = set(request.data.keys()) - {'password', 'current_password'}
+        if extra:
+            raise ValidationError('Можно изменить только пароль.')
+        current_password = request.data.get('current_password')
+        if not current_password:
+            raise ValidationError({'current_password': 'Укажите текущий пароль.'})
+        if not request.user.check_password(current_password):
+            raise ValidationError({'current_password': 'Неверный текущий пароль.'})
+        password = request.data.get('password')
+        if not password:
+            raise ValidationError({'password': 'Укажите новый пароль.'})
+        serializer = self.get_serializer(request.user, data={'password': password}, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        blacklist_outstanding_tokens(request.user)
+        write_audit(request.user, 'UPDATE', 'user', request.user.pk, details={'event': 'password_change'})
         return Response(serializer.data)
 
     def perform_create(self, serializer):
@@ -47,7 +72,14 @@ class UserViewSet(viewsets.ModelViewSet):
         write_audit(self.request.user, 'CREATE', 'user', instance.pk)
 
     def perform_update(self, serializer):
+        instance = serializer.instance
+        if instance.pk == self.request.user.pk and serializer.validated_data.get('is_active') is False:
+            raise ValidationError('Нельзя отключить собственную учётную запись.')
+        will_change_password = 'password' in serializer.validated_data
+        will_deactivate = serializer.validated_data.get('is_active') is False
         instance = serializer.save()
+        if will_change_password or will_deactivate:
+            blacklist_outstanding_tokens(instance)
         write_audit(self.request.user, 'UPDATE', 'user', instance.pk)
 
     def destroy(self, request, *args, **kwargs):
@@ -132,4 +164,4 @@ class LogoutView(APIView):
 class UserProfileViewSet(viewsets.ModelViewSet):
     queryset = UserProfile.objects.select_related('user').order_by('id')
     serializer_class = UserProfileSerializer
-    permission_classes = [IsManager]
+    permission_classes = [HasModule('users')]

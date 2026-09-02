@@ -1,20 +1,22 @@
+from django.db.models import Case, CharField, Value, When
 from rest_framework import viewsets, status
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+import django_filters
 from common.audit import write_audit
-from common.permissions import IsManagerOrReadOnly
+from common.permissions import CatalogCardPermission, HasAnyModule, HasModuleOrReadOnly
+from common.views import RestrictedDeleteMixin
 from .models import ProductCategory, Supplier, ProductCard
 from .serializers import ProductCategorySerializer, SupplierSerializer, ProductCardSerializer
 
-class ProductCategoryViewSet(viewsets.ModelViewSet):
+class ProductCategoryViewSet(RestrictedDeleteMixin, viewsets.ModelViewSet):
     queryset = ProductCategory.objects.order_by('code')
     serializer_class = ProductCategorySerializer
-    permission_classes = [IsManagerOrReadOnly]
+    permission_classes = [HasModuleOrReadOnly('references')]
 
-class SupplierViewSet(viewsets.ModelViewSet):
+class SupplierViewSet(RestrictedDeleteMixin, viewsets.ModelViewSet):
     queryset = Supplier.objects.order_by('name')
     serializer_class = SupplierSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAnyModule('warehouse', 'orders', 'references')]
     search_fields = ['name', 'contact_person', 'phone', 'email']
 
     def create(self, request, *args, **kwargs):
@@ -33,13 +35,21 @@ class SupplierViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(existing)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-from django.db.models import Case, When, Value, CharField
+
+class ProductCardFilter(django_filters.FilterSet):
+    rrp_min = django_filters.NumberFilter(field_name='rrp', lookup_expr='gte')
+    rrp_max = django_filters.NumberFilter(field_name='rrp', lookup_expr='lte')
+
+    class Meta:
+        model = ProductCard
+        fields = ['category', 'supplier', 'grill_type']
+
 
 class ProductCardViewSet(viewsets.ModelViewSet):
     queryset = ProductCard.objects.select_related('category', 'supplier').order_by('id')
     serializer_class = ProductCardSerializer
-    permission_classes = [IsAuthenticated]
-    filterset_fields = ['category', 'supplier', 'grill_type']
+    permission_classes = [CatalogCardPermission]
+    filterset_class = ProductCardFilter
     search_fields = ['name', 'sku', 'category__name', 'supplier__name', 'grill_type_name']
     ordering_fields = ['id', 'sku', 'name', 'rrp', 'base_cost_price', 'category__name', 'supplier__name']
     ordering = ['id']

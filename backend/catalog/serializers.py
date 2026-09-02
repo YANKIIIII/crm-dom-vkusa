@@ -1,10 +1,22 @@
 from rest_framework import serializers
+from common.slugs import next_letter_code
 from .models import ProductCategory, Supplier, ProductCard
 
 class ProductCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductCategory
         fields = '__all__'
+        extra_kwargs = {
+            'code': {'required': False},
+        }
+
+    def create(self, validated_data):
+        if not (validated_data.get('code') or '').strip():
+            used = ProductCategory.objects.values_list('code', flat=True)
+            validated_data['code'] = next_letter_code(used)
+        else:
+            validated_data['code'] = validated_data['code'].strip().upper()
+        return super().create(validated_data)
 
 class SupplierSerializer(serializers.ModelSerializer):
     class Meta:

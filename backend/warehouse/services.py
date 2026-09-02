@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Sum
 from rest_framework.exceptions import ValidationError
 from common.audit import write_audit
 from warehouse.models import StockItem
@@ -33,9 +34,27 @@ class WarehouseService:
     @staticmethod
     @transaction.atomic
     def assert_stock_available(item):
-        """Validate shelf qty without changing it (reservation does not deduct)."""
+        """Shelf minus qty already on open (non-completed) orders."""
+        from orders.models import OrderItem, open_order_status_codes
+
         stock_item = WarehouseService._locked_stock(item.product_card)
-        WarehouseService._require_available(stock_item, item.quantity)
+        if stock_item is None:
+            WarehouseService._require_available(None, item.quantity)
+            return
+        open_statuses = open_order_status_codes()
+        held_qs = OrderItem.objects.filter(
+            product_card=item.product_card,
+            order__status__in=open_statuses,
+        )
+        if item.pk:
+            held_qs = held_qs.exclude(pk=item.pk)
+        held = held_qs.aggregate(total=Sum('quantity'))['total'] or 0
+        available = stock_item.stock_quantity - held
+        if available < item.quantity:
+            raise ValidationError(
+                f'Недостаточно товара на складе. '
+                f'Доступно: {max(available, 0)} шт., запрошено: {item.quantity} шт.'
+            )
 
     @staticmethod
     @transaction.atomic

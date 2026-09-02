@@ -1,5 +1,4 @@
-from django.db import models
-from django.db.models import Max
+from django.db import models, transaction
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
 from users.models import User
@@ -21,6 +20,29 @@ class DeliveryService(models.Model):
     class Meta:
         db_table = 'delivery_services'
 
+
+class OrderStatus(models.Model):
+    class Kind(models.TextChoices):
+        OPEN = 'open', 'Открытый'
+        COMPLETED = 'completed', 'Завершен'
+        CANCELLED = 'cancelled', 'Отменен'
+
+    code = models.SlugField(max_length=32, unique=True, verbose_name='Код')
+    name = models.CharField(max_length=100, verbose_name='Наименование')
+    kind = models.CharField(
+        max_length=20, choices=Kind.choices, default=Kind.OPEN, verbose_name='Тип'
+    )
+    sort_order = models.PositiveSmallIntegerField(default=100, verbose_name='Порядок')
+    is_system = models.BooleanField(default=False, verbose_name='Системный')
+
+    class Meta:
+        db_table = 'order_statuses'
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return self.name
+
+
 class Order(models.Model):
     class Status(models.TextChoices):
         RESERVED = 'reserved', 'Резерв'
@@ -32,7 +54,7 @@ class Order(models.Model):
     order_number = models.PositiveIntegerField(unique=True, verbose_name='Номер заказа')
     order_date = models.DateField(verbose_name='Дата заказа')
     status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.RESERVED, verbose_name='Статус'
+        max_length=32, default=Status.RESERVED, verbose_name='Статус'
     )
     seller = models.ForeignKey(
         User, on_delete=models.RESTRICT, related_name='orders_as_seller',
@@ -61,6 +83,9 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def get_status_display(self):
+        return status_label(self.status)
+
     @property
     def subtotal(self):
         return sum(item.price_with_vat * item.quantity for item in self.items.all())
@@ -78,11 +103,20 @@ class Order(models.Model):
         return self.total_amount - self.total_cost
 
     def save(self, *args, **kwargs):
-        if not self.pk and not self.order_number:
-            last = Order.objects.aggregate(m=Max('order_number'))['m'] or 0
-            self.order_number = last + 1
-        if self.client and not self.pk:
+        is_create = self.pk is None
+        if is_create and self.client:
             self.discount_percent = self.client.discount_percent
+        if is_create and not self.order_number:
+            with transaction.atomic():
+                last = (
+                    Order.objects.select_for_update()
+                    .order_by('-order_number')
+                    .values_list('order_number', flat=True)
+                    .first()
+                ) or 0
+                self.order_number = last + 1
+                super().save(*args, **kwargs)
+            return
         super().save(*args, **kwargs)
 
     class Meta:
@@ -110,6 +144,55 @@ ALLOWED_STATUS_TRANSITIONS = {
     Order.Status.COMPLETED: (),
     Order.Status.CANCELLED: (),
 }
+
+
+def status_label(code):
+    row = OrderStatus.objects.filter(code=code).only('name').first()
+    if row:
+        return row.name
+    return dict(Order.Status.choices).get(code, code)
+
+
+def known_status_codes():
+    codes = {value for value, _label in Order.Status.choices}
+    codes.update(OrderStatus.objects.values_list('code', flat=True))
+    return codes
+
+
+def is_completed_status(code):
+    if code == Order.Status.COMPLETED:
+        return True
+    return OrderStatus.objects.filter(code=code, kind=OrderStatus.Kind.COMPLETED).exists()
+
+
+def is_cancelled_status(code):
+    if code == Order.Status.CANCELLED:
+        return True
+    return OrderStatus.objects.filter(code=code, kind=OrderStatus.Kind.CANCELLED).exists()
+
+
+def is_terminal_status(code):
+    return is_completed_status(code) or is_cancelled_status(code)
+
+
+def open_order_status_codes():
+    codes = {
+        Order.Status.RESERVED,
+        Order.Status.CONFIRMED,
+        Order.Status.IN_DELIVERY,
+    }
+    codes.update(
+        OrderStatus.objects.filter(kind=OrderStatus.Kind.OPEN).values_list('code', flat=True)
+    )
+    return tuple(codes)
+
+
+def completed_order_status_codes():
+    codes = {Order.Status.COMPLETED}
+    codes.update(
+        OrderStatus.objects.filter(kind=OrderStatus.Kind.COMPLETED).values_list('code', flat=True)
+    )
+    return tuple(codes)
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items', verbose_name='Заказ')

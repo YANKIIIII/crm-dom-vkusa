@@ -184,13 +184,15 @@ def main():
         seller.goto(f'{BASE}/orders', wait_until='networkidle')
         check('seller sees own orders', '1111' in seller.content())
 
-        # Phase B: seller direct / shows friendly forbidden (RoleRoute)
         seller.goto(f'{BASE}/', wait_until='networkidle')
-        seller_body = seller.locator('body').inner_text()
+        try:
+            seller.wait_for_url(re.compile(r'.*/orders/?$'), timeout=10000)
+        except Exception:
+            pass
         check(
-            'seller on / sees Недостаточно прав',
-            'Недостаточно прав' in seller_body,
-            seller_body[:160],
+            'seller on / redirects to /orders',
+            '/orders' in seller.url and 'Недостаточно прав' not in seller.locator('body').inner_text(),
+            seller.url,
         )
 
         browser.close()

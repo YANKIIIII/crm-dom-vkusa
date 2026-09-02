@@ -31,16 +31,16 @@ class ClientService:
 
         updates = ['last_purchase_date']
         client.last_purchase_date = order.order_date
-        first = items[0]
-        category_code = first.product_card.category.code or None
-        if category_code:
-            client.purchase_category = category_code
-            updates.append('purchase_category')
-
         grill_item = next(
             (item for item in items if item.product_card.category.code == 'A'),
             None,
         )
+        source = grill_item or items[0]
+        category_code = source.product_card.category.code or None
+        if category_code:
+            client.purchase_category = category_code
+            updates.append('purchase_category')
+
         if grill_item and grill_item.product_card.grill_type:
             client.grill_type = grill_item.product_card.grill_type
             updates.append('grill_type')
@@ -56,12 +56,12 @@ class ClientService:
     @transaction.atomic
     def recalculate_budget(client):
         """TZ 10.4: sum of completed orders, not incremental +=."""
-        from orders.models import Order
+        from orders.models import Order, completed_order_status_codes
 
         if client is None:
             return
         completed = Order.objects.filter(
-            client=client, status=Order.Status.COMPLETED
+            client=client, status__in=completed_order_status_codes()
         ).prefetch_related('items')
         total = sum((order.total_amount for order in completed), Decimal('0.00'))
         client.total_budget = total
@@ -77,7 +77,7 @@ class ClientService:
         can collect name and phone first.
         """
         if order.client:
-            return ClientService.sync_profile_from_order(order)
+            return order.client
 
         grill_item = ClientService._grill_item(order)
         has_grill = grill_item is not None
@@ -96,8 +96,6 @@ class ClientService:
         client = Client.objects.create(
             first_name=first_name,
             last_name=client_data.get('last_name', ''),
-            first_purchase_date=order.order_date,
-            last_purchase_date=order.order_date,
             purchase_category='A' if has_grill else None,
             grill_type=grill_item.product_card.grill_type if grill_item else None,
             acquisition_source=client_data.get('acquisition_source'),
@@ -118,13 +116,36 @@ class ClientService:
 
     @staticmethod
     @transaction.atomic
+    def refresh_purchase_dates(client):
+        from orders.models import Order, completed_order_status_codes
+
+        if client is None:
+            return
+        dates = list(
+            Order.objects.filter(client=client, status__in=completed_order_status_codes())
+            .values_list('order_date', flat=True)
+        )
+        if dates:
+            client.first_purchase_date = min(dates)
+            client.last_purchase_date = max(dates)
+        else:
+            client.first_purchase_date = None
+            client.last_purchase_date = None
+        client.save(update_fields=['first_purchase_date', 'last_purchase_date'])
+
+    @staticmethod
+    @transaction.atomic
     def update_budget_on_completion(order):
         """
         Called when an order is marked as completed or cancelled.
         Recalculates budget from completed orders and syncs profile fields.
         """
+        from orders.models import is_completed_status
+
         if not order.client:
             return
-        if order.status == 'completed':
+        if is_completed_status(order.status):
             ClientService.sync_profile_from_order(order)
+        else:
+            ClientService.refresh_purchase_dates(order.client)
         ClientService.recalculate_budget(order.client)
