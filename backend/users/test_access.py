@@ -1,6 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from users.access import ALL_MODULES
+from users.access import ALL_MODULES, append_tasks_module
 from users.models import User
 
 ANALYTICS_URL = '/api/v1/analytics/sales/'
@@ -26,7 +26,7 @@ def test_me_returns_job_title_and_default_seller_modules():
     response = _api(seller).get(ME_URL)
     assert response.status_code == 200, response.data
     assert response.data['job_title'] == ''
-    assert set(response.data['modules']) == {'orders', 'clients', 'warehouse'}
+    assert set(response.data['modules']) == {'orders', 'clients', 'tasks', 'warehouse'}
 
 
 @pytest.mark.django_db
@@ -37,7 +37,7 @@ def test_me_manager_has_all_modules():
     response = _api(manager).get(ME_URL)
     assert response.status_code == 200, response.data
     assert set(response.data['modules']) >= {
-        'analytics', 'orders', 'clients', 'warehouse', 'references', 'users', 'audit',
+        'analytics', 'orders', 'clients', 'tasks', 'warehouse', 'references', 'users', 'audit',
     }
 
 
@@ -143,9 +143,19 @@ def test_demoting_manager_resets_to_seller_default_modules():
     patched = api.patch(f'{USERS_URL}{peer.pk}/', {'role': 'seller'}, format='json')
     assert patched.status_code == 200, patched.data
     assert patched.data['role'] == 'seller'
-    assert set(patched.data['modules']) == {'orders', 'clients', 'warehouse'}
+    assert set(patched.data['modules']) == {'orders', 'clients', 'tasks', 'warehouse'}
     peer.refresh_from_db()
     assert peer.role == 'seller'
     assert _api(peer).get(ANALYTICS_URL).status_code == 403
     assert _api(peer).get(USERS_URL).status_code == 403
     assert _api(peer).get(ORDERS_URL).status_code == 200
+
+
+def test_append_tasks_module_skips_empty_stored():
+    assert append_tasks_module([]) == []
+    assert append_tasks_module(None) == []
+
+
+def test_append_tasks_module_adds_once():
+    assert append_tasks_module(['orders', 'clients']) == ['orders', 'clients', 'tasks']
+    assert append_tasks_module(['orders', 'tasks']) == ['orders', 'tasks']

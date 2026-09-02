@@ -2,6 +2,7 @@ ALL_MODULES = (
     'analytics',
     'orders',
     'clients',
+    'tasks',
     'warehouse',
     'references',
     'users',
@@ -11,10 +12,19 @@ GRANTABLE_MODULES = (
     'analytics',
     'orders',
     'clients',
+    'tasks',
     'warehouse',
     'references',
 )
-SELLER_DEFAULT_MODULES = ('orders', 'clients', 'warehouse')
+SELLER_DEFAULT_MODULES = ('orders', 'clients', 'tasks', 'warehouse')
+
+
+def append_tasks_module(stored):
+    if not stored:
+        return []
+    if 'tasks' in stored:
+        return list(stored)
+    return list(stored) + ['tasks']
 
 
 def stored_modules_for(role, modules=None):
