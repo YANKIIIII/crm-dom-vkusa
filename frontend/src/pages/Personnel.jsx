@@ -3,6 +3,7 @@ import ChevronLeft from '@mui/icons-material/ChevronLeft';
 import ChevronRight from '@mui/icons-material/ChevronRight';
 import { useMemo, useState } from 'react';
 import EmployeesPanel from './personnel/EmployeesPanel';
+import LeaveCalendar from './personnel/LeaveCalendar';
 
 const MONTHS = [
   'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
@@ -97,7 +98,7 @@ const Personnel = () => {
         </Box>
       ) : (
         <Box role="tabpanel" id="personnel-panel-leaves" aria-labelledby="personnel-tab-leaves">
-          <Typography sx={{ color: '#718096', py: 4 }}>Календарь в следующем шаге</Typography>
+          <LeaveCalendar year={year} month={month} />
         </Box>
       )}
     </Box>
