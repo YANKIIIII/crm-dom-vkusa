@@ -2,6 +2,24 @@ from django.db import models
 from django.core.validators import MinValueValidator
 from decimal import Decimal
 
+
+class GrillType(models.Model):
+    code = models.SlugField(max_length=32, unique=True, verbose_name='Код')
+    name = models.CharField(max_length=100, verbose_name='Наименование')
+    sort_order = models.PositiveSmallIntegerField(default=100, verbose_name='Порядок')
+
+    class Meta:
+        db_table = 'grill_types'
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def label_map(cls):
+        return dict(cls.objects.values_list('code', 'name'))
+
+
 class ProductCategory(models.Model):
     code = models.CharField(max_length=10, unique=True, verbose_name='Код') # A, B, C, D, E
     name = models.CharField(max_length=100, verbose_name='Наименование')
@@ -22,13 +40,6 @@ class Supplier(models.Model):
         db_table = 'suppliers'
 
 class ProductCard(models.Model):
-    class GrillType(models.TextChoices):
-        CHARCOAL = 'charcoal', 'Угольный'
-        GAS = 'gas', 'Газовый'
-        CERAMIC = 'ceramic', 'Керамический'
-        ELECTRIC = 'electric', 'Электрический'
-        PELLET = 'pellet', 'Пеллетный'
-
     name = models.CharField(max_length=255, verbose_name='Наименование')
     sku = models.CharField(max_length=50, unique=True, verbose_name='Артикул')
     category = models.ForeignKey(
@@ -53,7 +64,7 @@ class ProductCard(models.Model):
         default=0, verbose_name='Мин. остаток'
     )
     grill_type = models.CharField(
-        max_length=20, choices=GrillType.choices, null=True, blank=True, verbose_name='Тип гриля'
+        max_length=32, null=True, blank=True, verbose_name='Тип гриля'
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

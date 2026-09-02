@@ -1,11 +1,13 @@
 from rest_framework import serializers
+from catalog.models import GrillType
+from catalog.serializers import normalize_grill_type
 from .models import Client, ClientPhone
 
 class ClientSerializer(serializers.ModelSerializer):
     phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
     phone_comment = serializers.CharField(write_only=True, required=False, allow_blank=True)
     primary_phone = serializers.SerializerMethodField(read_only=True)
-    grill_type_display = serializers.CharField(source='get_grill_type_display', read_only=True)
+    grill_type_display = serializers.SerializerMethodField()
     
     class Meta:
         model = Client
@@ -20,6 +22,18 @@ class ClientSerializer(serializers.ModelSerializer):
             'primary_phone',
             'grill_type_display',
         )
+
+    def get_grill_type_display(self, obj):
+        code = obj.grill_type
+        if not code:
+            return ''
+        labels = self.context.get('grill_type_labels')
+        if labels is None:
+            labels = GrillType.label_map()
+        return labels.get(code) or code
+
+    def validate_grill_type(self, value):
+        return normalize_grill_type(value)
 
     def create(self, validated_data):
         phone = validated_data.pop('phone', None)

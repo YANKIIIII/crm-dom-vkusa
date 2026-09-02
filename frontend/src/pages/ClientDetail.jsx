@@ -7,11 +7,9 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
-import { extractApiError, formatCurrency, formatDate, GRILL_TYPE_LABELS, CATALOG_PAGE_SIZE } from '../utils';
+import { extractApiError, formatCurrency, formatDate, CATALOG_PAGE_SIZE, unwrapList, mapGrillTypes } from '../utils';
 import { useFeedback } from '../hooks/useFeedback';
 import SearchableSelect from '../components/SearchableSelect';
-
-const GRILL_TYPES = Object.entries(GRILL_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 
 const PHONE_COMMENT_OPTIONS = ['рабочий', 'домашний', 'мобильный', 'WhatsApp', 'Telegram', 'Viber'];
 
@@ -95,6 +93,7 @@ const ClientDetail = () => {
   const [client, setClient] = useState(null);
   const [orders, setOrders] = useState([]);
   const [channels, setChannels] = useState([]);
+  const [grillTypes, setGrillTypes] = useState([]);
   const [phones, setPhones] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -119,9 +118,13 @@ const ClientDetail = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const channelsRes = await api.get('/orders/sales_channels/', { params: { page_size: CATALOG_PAGE_SIZE } }).catch(() => ({ data: [] }));
-        const channelList = channelsRes.data.results || channelsRes.data || [];
+        const [channelsRes, grillTypesRes] = await Promise.all([
+          api.get('/orders/sales_channels/', { params: { page_size: CATALOG_PAGE_SIZE } }).catch(() => ({ data: [] })),
+          api.get('/catalog/grill_types/', { params: { page_size: CATALOG_PAGE_SIZE } }).catch(() => ({ data: [] })),
+        ]);
+        const channelList = unwrapList(channelsRes.data);
         setChannels(channelList);
+        setGrillTypes(mapGrillTypes(unwrapList(grillTypesRes.data)));
 
         if (!isNew) {
           const [clientRes, ordersRes] = await Promise.all([
@@ -438,7 +441,7 @@ const ClientDetail = () => {
                   onChange={(value) => setFormData((prev) => ({ ...prev, grill_type: value }))}
                   options={[
                     { value: '', label: 'Не указан' },
-                    ...GRILL_TYPES.map((g) => ({ value: g.value, label: g.label })),
+                    ...grillTypes,
                   ]}
                 />
               </Box>

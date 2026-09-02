@@ -234,7 +234,7 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
                       </TableCell>
                       <TableCell sx={{ fontSize: '0.8rem' }}>{product.category_name || '-'}</TableCell>
                       <TableCell sx={{ fontSize: '0.8rem' }}>
-                        {GRILL_TYPE_LABELS[product.grill_type] || '-'}
+                        {product.grill_type_name || GRILL_TYPE_LABELS[product.grill_type] || '-'}
                       </TableCell>
                       <TableCell sx={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{product.dimensions || '—'}</TableCell>
                       <TableCell sx={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{product.weight ? `${product.weight} кг` : '—'}</TableCell>

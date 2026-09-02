@@ -4,7 +4,7 @@ import {
 } from '@mui/material';
 import SearchableSelect from './SearchableSelect';
 import SupplierPicker from './SupplierPicker';
-import { GRILL_TYPE_LABELS, extractApiError } from '../utils';
+import { CATALOG_PAGE_SIZE, extractApiError, mapGrillTypes, unwrapList } from '../utils';
 import api from '../api';
 
 const ProductCardDialog = ({
@@ -24,6 +24,7 @@ const ProductCardDialog = ({
   const [supplierPhone, setSupplierPhone] = useState('');
   const [addingSupplier, setAddingSupplier] = useState(false);
   const [supplierError, setSupplierError] = useState(null);
+  const [grillTypes, setGrillTypes] = useState([]);
 
   useEffect(() => {
     if (!open) return;
@@ -32,6 +33,21 @@ const ProductCardDialog = ({
     setSupplierPhone(current?.phone || '');
     setSupplierError(null);
   }, [open, formData.supplier, suppliers]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    api.get('/catalog/grill_types/', { params: { page_size: CATALOG_PAGE_SIZE } })
+      .then((response) => {
+        if (!cancelled) setGrillTypes(mapGrillTypes(unwrapList(response.data)));
+      })
+      .catch(() => {
+        if (!cancelled) setGrillTypes(mapGrillTypes([]));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -126,7 +142,7 @@ const ProductCardDialog = ({
           label="Тип гриля"
           value={formData.grill_type}
           onChange={(value) => setFormData((prev) => ({ ...prev, grill_type: value }))}
-          options={Object.entries(GRILL_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
+          options={grillTypes}
         />
         <TextField
           fullWidth

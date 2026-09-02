@@ -9,18 +9,13 @@ import api from '../api';
 import { useFeedback } from '../hooks/useFeedback';
 import {
   PAGE_SIZE, PAGE_SIZE_OPTIONS, formatCurrency, formatDate, extractApiError,
-  toggleOrdering, buildListQuery, CATALOG_PAGE_SIZE, unwrapList, GRILL_TYPE_LABELS,
+  toggleOrdering, buildListQuery, CATALOG_PAGE_SIZE, unwrapList, mapGrillTypes,
   toRangeQuery, rangeInputFromQuery,
 } from '../utils';
 import SortableHeader from '../components/SortableHeader';
 import SearchableSelect from '../components/SearchableSelect';
 import CompareFilter from '../components/CompareFilter';
 import TruncatedText from '../components/TruncatedText';
-
-const GRILL_TYPE_FILTERS = [
-  { value: '', label: 'Все' },
-  ...Object.entries(GRILL_TYPE_LABELS).map(([value, label]) => ({ value, label })),
-];
 
 const Clients = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -45,6 +40,7 @@ const Clients = () => {
   const [searchInput, setSearchInput] = useState(urlSearch);
   const [clients, setClients] = useState([]);
   const [channels, setChannels] = useState([]);
+  const [grillTypes, setGrillTypes] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -63,6 +59,13 @@ const Clients = () => {
       })
       .catch(() => {
         if (!cancelled) setChannels([]);
+      });
+    api.get('/catalog/grill_types/', { params: { page_size: CATALOG_PAGE_SIZE } })
+      .then((response) => {
+        if (!cancelled) setGrillTypes(mapGrillTypes(unwrapList(response.data)));
+      })
+      .catch(() => {
+        if (!cancelled) setGrillTypes(mapGrillTypes([]));
       });
     return () => {
       cancelled = true;
@@ -248,7 +251,10 @@ const Clients = () => {
               label="Тип гриля"
               value={urlGrillType}
               onChange={(value) => updateUrl({ search: urlSearch, page0Based: 0, grillType: value })}
-              options={GRILL_TYPE_FILTERS}
+              options={[
+                { value: '', label: 'Все' },
+                ...grillTypes,
+              ]}
             />
           </Box>
           <Box sx={{ minWidth: 180, flex: '0 1 180px' }}>

@@ -1,12 +1,31 @@
-from django.db.models import Case, CharField, Value, When
+from django.db.models import CharField, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
 from rest_framework import viewsets, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 import django_filters
+from clients.models import Client
 from common.audit import write_audit
 from common.permissions import CatalogCardPermission, HasAnyModule, HasModuleOrReadOnly
 from common.views import RestrictedDeleteMixin
-from .models import ProductCategory, Supplier, ProductCard
-from .serializers import ProductCategorySerializer, SupplierSerializer, ProductCardSerializer
+from .models import GrillType, ProductCategory, Supplier, ProductCard
+from .serializers import (
+    GrillTypeSerializer, ProductCategorySerializer, SupplierSerializer, ProductCardSerializer,
+)
+
+
+class GrillTypeViewSet(viewsets.ModelViewSet):
+    queryset = GrillType.objects.order_by('sort_order', 'id')
+    serializer_class = GrillTypeSerializer
+    permission_classes = [HasModuleOrReadOnly('references')]
+
+    def perform_destroy(self, instance):
+        if ProductCard.objects.filter(grill_type=instance.code).exists():
+            raise ValidationError('Нельзя удалить: тип используется в товарах.')
+        if Client.objects.filter(grill_type=instance.code).exists():
+            raise ValidationError('Нельзя удалить: тип используется у клиентов.')
+        instance.delete()
+
 
 class ProductCategoryViewSet(RestrictedDeleteMixin, viewsets.ModelViewSet):
     queryset = ProductCategory.objects.order_by('code')
@@ -56,17 +75,15 @@ class ProductCardViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        name_sub = GrillType.objects.filter(code=OuterRef('grill_type')).values('name')[:1]
         return qs.annotate(
-            grill_type_name=Case(
-                When(grill_type='charcoal', then=Value('Угольный')),
-                When(grill_type='gas', then=Value('Газовый')),
-                When(grill_type='ceramic', then=Value('Керамический')),
-                When(grill_type='electric', then=Value('Электрический')),
-                When(grill_type='pellet', then=Value('Пеллетный')),
-                default=Value(''),
-                output_field=CharField()
-            )
+            grill_type_name=Coalesce(Subquery(name_sub), Value(''), output_field=CharField())
         )
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['grill_type_labels'] = GrillType.label_map()
+        return ctx
 
     def perform_create(self, serializer):
         instance = serializer.save()

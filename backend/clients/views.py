@@ -2,6 +2,7 @@ from rest_framework import viewsets
 from common.permissions import ClientAccessPermission
 from rest_framework.exceptions import PermissionDenied
 import django_filters
+from catalog.models import GrillType
 from common.audit import write_audit
 from .models import Client, ClientPhone
 from .serializers import ClientSerializer, ClientPhoneSerializer
@@ -27,6 +28,11 @@ class ClientViewSet(viewsets.ModelViewSet):
         'purchase_category', 'last_purchase_date', 'first_purchase_date', 'total_budget',
     ]
     ordering = ['-id']
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['grill_type_labels'] = GrillType.label_map()
+        return ctx
 
     def perform_create(self, serializer):
         user = self.request.user

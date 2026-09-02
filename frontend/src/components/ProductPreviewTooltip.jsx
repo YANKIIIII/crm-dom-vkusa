@@ -8,6 +8,7 @@ const previewFromProduct = (product) => {
     sku: product.sku || product.product_sku,
     category: product.category_name || product.product_category_name,
     grillType: product.grill_type || product.product_grill_type,
+    grillTypeName: product.grill_type_name || product.product_grill_type_name,
     dimensions: product.dimensions || product.product_dimensions,
     weight: product.weight || product.product_weight,
     rrp: product.rrp || product.product_rrp,
@@ -22,7 +23,7 @@ const ProductPreviewTooltip = ({ product, children }) => {
   const rows = [
     info.sku && ['Артикул', info.sku],
     info.category && ['Категория', info.category],
-    info.grillType && ['Тип гриля', GRILL_TYPE_LABELS[info.grillType] || info.grillType],
+    info.grillType && ['Тип гриля', info.grillTypeName || GRILL_TYPE_LABELS[info.grillType] || info.grillType],
     info.dimensions && ['Габариты', info.dimensions],
     info.weight != null && info.weight !== '' && ['Вес', `${info.weight} кг`],
     info.rrp && ['РРЦ', formatCurrency(info.rrp)],

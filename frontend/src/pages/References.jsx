@@ -67,6 +67,14 @@ const TABS = [
     emptyForm: { name: '' },
   },
   {
+    id: 'grill_types',
+    label: 'Типы гриля',
+    endpoint: '/catalog/grill_types/',
+    columns: [{ key: 'name', label: 'Название' }],
+    fields: [{ key: 'name', label: 'Название', required: true }],
+    emptyForm: { name: '' },
+  },
+  {
     id: 'deliveries',
     label: 'Доставка',
     endpoint: '/orders/delivery_services/',

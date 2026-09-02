@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
-from catalog.models import ProductCard
+
 
 class Client(models.Model):
     first_name = models.CharField(max_length=100, verbose_name='Имя')
@@ -14,7 +14,7 @@ class Client(models.Model):
     first_purchase_date = models.DateField(null=True, blank=True, verbose_name='Дата первой покупки')
     last_purchase_date = models.DateField(null=True, blank=True, verbose_name='Дата последней покупки')
     grill_type = models.CharField(
-        max_length=20, choices=ProductCard.GrillType.choices, null=True, blank=True, verbose_name='Тип гриля'
+        max_length=32, null=True, blank=True, verbose_name='Тип гриля'
     )
     total_budget = models.DecimalField(
         max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(Decimal('0.00'))], verbose_name='Общий бюджет'

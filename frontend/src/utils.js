@@ -22,13 +22,27 @@ export const PAGE_SIZE = 25;
 export const PAGE_SIZE_OPTIONS = [25, 50, 100];
 export const CATALOG_PAGE_SIZE = 100;
 
-export const GRILL_TYPE_LABELS = {
-  charcoal: 'Угольный',
-  gas: 'Газовый',
-  ceramic: 'Керамический',
-  electric: 'Электрический',
-  pellet: 'Пеллетный',
-};
+export const DEFAULT_GRILL_TYPES = [
+  { code: 'charcoal', name: 'Угольный' },
+  { code: 'gas', name: 'Газовый' },
+  { code: 'ceramic', name: 'Керамический' },
+  { code: 'electric', name: 'Электрический' },
+  { code: 'pellet', name: 'Пеллетный' },
+];
+
+export const GRILL_TYPE_LABELS = Object.fromEntries(
+  DEFAULT_GRILL_TYPES.map((row) => [row.code, row.name]),
+);
+
+export function mapGrillTypes(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const source = list.length ? list : DEFAULT_GRILL_TYPES;
+  return source.map((row) => ({
+    ...row,
+    value: row.code,
+    label: row.name,
+  }));
+}
 
 export const DEFAULT_ORDER_STATUSES = [
   { code: 'reserved', name: 'Резерв', kind: 'open' },
