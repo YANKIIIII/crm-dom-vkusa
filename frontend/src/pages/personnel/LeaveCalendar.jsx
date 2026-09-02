@@ -427,7 +427,8 @@ const LeaveCalendar = ({ year, month }) => {
                     const colors = leaveColors(item.kind);
                     const widthPct = ((item.endDay - item.startDay + 1) / days) * 100;
                     const leftPct = ((item.startDay - 1) / days) * 100;
-                    const label = `${KIND_LABELS[item.kind] || item.kind} ${formatIsoRange(item.date_from, item.date_to)}${item.comment ? `\n${item.comment}` : ''}`;
+                    const workingDaysStr = item.working_days ? ` (${item.working_days} раб. дн.)` : '';
+                    const label = `${KIND_LABELS[item.kind] || item.kind} ${formatIsoRange(item.date_from, item.date_to)}${workingDaysStr}${item.comment ? `\n${item.comment}` : ''}`;
                     return (
                       <Tooltip key={item.id} title={label} placement="top">
                         <Box

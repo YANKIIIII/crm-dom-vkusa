@@ -44,6 +44,27 @@ const formFromPreset = (preset) => ({
   comment: preset?.comment || '',
 });
 
+const countWorkingDays = (fromStr, toStr) => {
+  if (!fromStr || !toStr || toStr < fromStr) return 0;
+  const [fY, fM, fD] = fromStr.split('-').map(Number);
+  const [tY, tM, tD] = toStr.split('-').map(Number);
+  const current = new Date(fY, fM - 1, fD);
+  const end = new Date(tY, tM - 1, tD);
+  let count = 0;
+  while (current <= end) {
+    const dow = current.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+};
+
+const pluralizeDays = (n) => {
+  if (n % 10 === 1 && n % 100 !== 11) return `${n} день`;
+  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return `${n} дня`;
+  return `${n} дней`;
+};
+
 const LeaveDialog = ({
   open,
   onClose,
@@ -162,22 +183,31 @@ const LeaveDialog = ({
           onChange={(value) => setForm((prev) => ({ ...prev, kind: value }))}
           options={KIND_OPTIONS}
         />
-        <TextField
-          label="С"
-          type="date"
-          required
-          value={form.date_from}
-          onChange={(event) => setForm((prev) => ({ ...prev, date_from: event.target.value }))}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
-        <TextField
-          label="По"
-          type="date"
-          required
-          value={form.date_to}
-          onChange={(event) => setForm((prev) => ({ ...prev, date_to: event.target.value }))}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <TextField
+            label="С"
+            type="date"
+            required
+            fullWidth
+            value={form.date_from}
+            onChange={(event) => setForm((prev) => ({ ...prev, date_from: event.target.value }))}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            label="По"
+            type="date"
+            required
+            fullWidth
+            value={form.date_to}
+            onChange={(event) => setForm((prev) => ({ ...prev, date_to: event.target.value }))}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </Box>
+        {form.date_from && form.date_to && form.date_to >= form.date_from && (
+          <Typography variant="body2" sx={{ color: '#4A5568', textAlign: 'center', mt: -1 }}>
+            Продолжительность: <strong>{countWorkingDays(form.date_from, form.date_to)} раб. {pluralizeDays(countWorkingDays(form.date_from, form.date_to)).split(' ')[1]}</strong>
+          </Typography>
+        )}
         <TextField
           label="Комментарий"
           value={form.comment}
