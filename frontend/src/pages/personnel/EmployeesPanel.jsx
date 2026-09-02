@@ -1,5 +1,5 @@
 import {
-  Alert, Box, Button, Chip, CircularProgress, List, ListItemButton, ListItemText,
+  Alert, Avatar, Box, Button, Chip, CircularProgress, Divider, List, ListItemButton, ListItemAvatar, ListItemText,
   Paper, TextField, Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -23,6 +23,12 @@ const pad2 = (value) => String(value).padStart(2, '0');
 const employeeName = (row) => (
   `${row.last_name || ''} ${row.first_name || ''}`.trim() || row.username || `Сотрудник #${row.id}`
 );
+
+const employeeInitials = (row) => {
+  const last = (row.last_name || '')[0] || '';
+  const first = (row.first_name || '')[0] || '';
+  return (last + first).toUpperCase() || (row.username || '?')[0].toUpperCase();
+};
 
 const formatIso = (iso) => {
   if (!iso) return '';
@@ -64,6 +70,13 @@ const toNum = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const SectionTitle = ({ icon, children }) => (
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+    <span className="material-icons" style={{ fontSize: 18, color: '#CC5E33' }} aria-hidden="true">{icon}</span>
+    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#2D3748', fontSize: '0.85rem' }}>{children}</Typography>
+  </Box>
+);
 
 const EmployeesPanel = ({ year, month }) => {
   const { notify } = useFeedback();
@@ -268,221 +281,400 @@ const EmployeesPanel = ({ year, month }) => {
     <Box
       sx={{
         display: 'flex',
-        gap: 2,
+        gap: 2.5,
         alignItems: 'stretch',
         flexDirection: { xs: 'column', md: 'row' },
       }}
     >
+      {/* LEFT SIDEBAR: employee list */}
       <Paper
         sx={{
           width: { xs: '100%', md: 300 },
           flexShrink: 0,
-          p: 1,
-          maxHeight: { xs: 280, md: 'calc(100vh - 260px)' },
+          p: 0,
+          maxHeight: { xs: 300, md: 'calc(100vh - 260px)' },
           overflow: 'auto',
+          borderRadius: 3,
         }}
       >
         {listLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
         ) : listError ? (
-          <Alert severity="error">{listError}</Alert>
+          <Alert severity="error" sx={{ m: 1 }}>{listError}</Alert>
         ) : employees.length === 0 ? (
-          <Typography sx={{ color: '#718096', p: 2 }}>
-            Сотрудников заводят в разделе Пользователи
-          </Typography>
+          <Box sx={{ p: 3, textAlign: 'center' }}>
+            <span className="material-icons" style={{ fontSize: 48, color: '#CBD5E0' }} aria-hidden="true">group_add</span>
+            <Typography sx={{ color: '#718096', mt: 1 }}>
+              Сотрудников заводят в разделе Пользователи
+            </Typography>
+          </Box>
         ) : (
-          <List disablePadding>
+          <List disablePadding sx={{ p: 1 }}>
             {employees.map((row) => (
               <ListItemButton
                 key={row.id}
                 selected={row.id === selectedId}
                 onClick={() => setSelectedId(row.id)}
                 sx={{
-                  opacity: row.is_active ? 1 : 0.5,
-                  borderRadius: '8px',
+                  opacity: row.is_active ? 1 : 0.45,
+                  borderRadius: '10px',
                   mb: 0.5,
+                  py: 1,
+                  transition: 'all 0.15s',
                   '&.Mui-selected': {
-                    bgcolor: 'rgba(204, 94, 51, 0.12)',
-                    '&:hover': { bgcolor: 'rgba(204, 94, 51, 0.18)' },
+                    bgcolor: 'rgba(204, 94, 51, 0.10)',
+                    '&:hover': { bgcolor: 'rgba(204, 94, 51, 0.16)' },
                   },
                 }}
               >
+                <ListItemAvatar sx={{ minWidth: 40 }}>
+                  <Avatar
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      bgcolor: row.id === selectedId ? '#CC5E33' : '#A0AEC0',
+                      transition: 'background-color 0.2s',
+                    }}
+                  >
+                    {employeeInitials(row)}
+                  </Avatar>
+                </ListItemAvatar>
                 <ListItemText
                   primary={employeeName(row)}
                   secondary={formatCurrency(row.pay_total ?? 0)}
                   slotProps={{
-                    primary: { sx: { fontWeight: 600, color: '#1A202C' } },
-                    secondary: { sx: { color: '#CC5E33', fontWeight: 600 } },
+                    primary: { sx: { fontWeight: 600, color: '#1A202C', fontSize: '0.875rem' } },
+                    secondary: { sx: { color: '#CC5E33', fontWeight: 700, fontSize: '0.8rem' } },
                   }}
                 />
+                {!row.is_active && (
+                  <Chip size="small" label="Неактивен" sx={{ ml: 0.5, fontSize: '0.65rem', height: 20 }} />
+                )}
               </ListItemButton>
             ))}
           </List>
         )}
       </Paper>
 
-      <Paper sx={{ flex: 1, p: 3, minHeight: 360, opacity: selected && selected.is_active === false ? 0.85 : 1 }}>
+      {/* RIGHT PANEL: employee card */}
+      <Paper
+        sx={{
+          flex: 1,
+          p: 0,
+          minHeight: 400,
+          opacity: selected && selected.is_active === false ? 0.85 : 1,
+          borderRadius: 3,
+          overflow: 'hidden',
+        }}
+      >
         {!selectedId ? (
-          <Typography sx={{ color: '#718096' }}>
-            Сотрудников заводят в разделе Пользователи
-          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', py: 8 }}>
+            <span className="material-icons" style={{ fontSize: 56, color: '#CBD5E0' }} aria-hidden="true">person_search</span>
+            <Typography sx={{ color: '#718096', mt: 1.5 }}>
+              Выберите сотрудника из списка
+            </Typography>
+          </Box>
         ) : detailLoading && !detail ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
         ) : !detail ? (
-          <Typography sx={{ color: '#718096' }}>Не удалось загрузить карточку</Typography>
+          <Typography sx={{ color: '#718096', p: 3 }}>Не удалось загрузить карточку</Typography>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              <Typography variant="h5" sx={{ fontWeight: 600 }}>{employeeName(detail)}</Typography>
-              {detail.is_active === false && <Chip size="small" label="Неактивен" />}
-            </Box>
-            <Typography variant="body2" sx={{ color: '#718096', mt: -1 }}>
-              {roleOrTitle}
-              {detail.username ? ` · ${detail.username}` : ''}
-            </Typography>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <TextField
-                label="Телефон"
-                value={profile.phone}
-                onChange={(event) => setProfile((prev) => ({ ...prev, phone: event.target.value }))}
-                onBlur={() => persist('profile')}
-              />
-              <TextField
-                label="День рождения"
-                type="date"
-                value={profile.birthday}
-                onChange={(event) => setProfile((prev) => ({ ...prev, birthday: event.target.value }))}
-                onBlur={() => persist('profile')}
-                slotProps={{ inputLabel: { shrink: true } }}
-              />
-            </Box>
-            <TextField
-              label="Заметка"
-              value={profile.notes}
-              onChange={(event) => setProfile((prev) => ({ ...prev, notes: event.target.value }))}
-              onBlur={() => persist('profile')}
-              multiline
-              minRows={2}
-            />
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <TextField
-                label="Ставка часа"
-                type="number"
-                value={profile.hourly_rate}
-                onChange={(event) => setProfile((prev) => ({ ...prev, hourly_rate: event.target.value }))}
-                onBlur={() => persist('profile')}
-                slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
-              />
-              <TextField
-                label="Процент с продаж"
-                type="number"
-                value={profile.commission_percent}
-                onChange={(event) => setProfile((prev) => ({ ...prev, commission_percent: event.target.value }))}
-                onBlur={() => persist('profile')}
-                slotProps={{ htmlInput: { min: 0, max: 100, step: '0.01' } }}
-              />
-            </Box>
-            <Typography variant="caption" sx={{ color: '#718096', mt: -1 }}>
-              Ставка и процент выше — текущие в профиле.
-              {rateSource === 'month'
-                ? ` Для расчёта этого месяца зафиксированы ${formatCurrency(monthInfo.hourly_rate)} / час и ${toNum(monthInfo.commission_percent)}%.`
-                : ' Месяц ещё не сохраняли — в расчёт берутся ставка и процент из профиля.'}
-            </Typography>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <TextField
-                label="Часы за месяц"
-                type="number"
-                value={monthForm.hours}
-                onChange={(event) => setMonthForm((prev) => ({ ...prev, hours: event.target.value }))}
-                onBlur={() => persist('month')}
-                slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
-              />
-              <TextField
-                label="Бонус"
-                type="number"
-                value={monthForm.bonus}
-                onChange={(event) => setMonthForm((prev) => ({ ...prev, bonus: event.target.value }))}
-                onBlur={() => persist('month')}
-                slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
-              />
-            </Box>
-
-            <Box sx={{ bgcolor: '#F7FAFC', borderRadius: 2, p: 2 }}>
-              <Typography variant="body2" sx={{ color: '#4A5568' }}>
-                {hours} ч × {formatCurrency(rate)} = {formatCurrency(hoursPay)}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#4A5568' }}>
-                {percent}% × {formatCurrency(sales)} = {formatCurrency(salesPay)}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#4A5568' }}>
-                Бонус {formatCurrency(bonus)}
-              </Typography>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, mt: 1, color: '#1A202C' }}>
-                Итого {formatCurrency(livePay)}
-              </Typography>
-            </Box>
-
-            {(profileDirty || monthDirty) && (
+          <Box>
+            {/* Header with avatar */}
+            <Box
+              sx={{
+                background: 'linear-gradient(135deg, #2D3748 0%, #4A5568 100%)',
+                px: 3,
+                py: 2.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+              }}
+            >
+              <Avatar
+                sx={{
+                  width: 48,
+                  height: 48,
+                  bgcolor: '#CC5E33',
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                }}
+              >
+                {employeeInitials(detail)}
+              </Avatar>
               <Box>
-                <Button variant="contained" onClick={() => persist('all', { toast: true })} disabled={saving}>
-                  {saving ? <CircularProgress size={22} /> : 'Сохранить'}
-                </Button>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#FFFFFF' }}>
+                    {employeeName(detail)}
+                  </Typography>
+                  {detail.is_active === false && (
+                    <Chip
+                      size="small"
+                      label="Неактивен"
+                      sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#FFFFFF', fontSize: '0.7rem' }}
+                    />
+                  )}
+                </Box>
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                  {roleOrTitle}
+                  {detail.username ? ` · @${detail.username}` : ''}
+                </Typography>
               </Box>
-            )}
+            </Box>
 
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1, flexWrap: 'wrap' }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Отпуска / отгулы</Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button
+            <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* SECTION: Personal info */}
+              <Box>
+                <SectionTitle icon="badge">Личные данные</SectionTitle>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <TextField
+                    label="Телефон"
                     size="small"
-                    onClick={() => openLeave('vacation')}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    + отпуск
-                  </Button>
-                  <Button
+                    value={profile.phone}
+                    onChange={(event) => setProfile((prev) => ({ ...prev, phone: event.target.value }))}
+                    onBlur={() => persist('profile')}
+                    slotProps={{ input: { startAdornment: <span className="material-icons" style={{ fontSize: 18, color: '#A0AEC0', marginRight: 6 }} aria-hidden="true">phone</span> } }}
+                  />
+                  <TextField
+                    label="День рождения"
                     size="small"
-                    onClick={() => openLeave('time_off')}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    + отгул
-                  </Button>
+                    type="date"
+                    value={profile.birthday}
+                    onChange={(event) => setProfile((prev) => ({ ...prev, birthday: event.target.value }))}
+                    onBlur={() => persist('profile')}
+                    slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <span className="material-icons" style={{ fontSize: 18, color: '#A0AEC0', marginRight: 6 }} aria-hidden="true">cake</span> } }}
+                  />
+                </Box>
+                <TextField
+                  label="Заметка"
+                  size="small"
+                  value={profile.notes}
+                  onChange={(event) => setProfile((prev) => ({ ...prev, notes: event.target.value }))}
+                  onBlur={() => persist('profile')}
+                  multiline
+                  minRows={2}
+                  fullWidth
+                  sx={{ mt: 2 }}
+                />
+              </Box>
+
+              <Divider />
+
+              {/* SECTION: Rates */}
+              <Box>
+                <SectionTitle icon="payments">Ставки</SectionTitle>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <TextField
+                    label="Ставка часа"
+                    size="small"
+                    type="number"
+                    value={profile.hourly_rate}
+                    onChange={(event) => setProfile((prev) => ({ ...prev, hourly_rate: event.target.value }))}
+                    onBlur={() => persist('profile')}
+                    slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
+                  />
+                  <TextField
+                    label="Процент с продаж"
+                    size="small"
+                    type="number"
+                    value={profile.commission_percent}
+                    onChange={(event) => setProfile((prev) => ({ ...prev, commission_percent: event.target.value }))}
+                    onBlur={() => persist('profile')}
+                    slotProps={{ htmlInput: { min: 0, max: 100, step: '0.01' } }}
+                  />
+                </Box>
+                <Typography variant="caption" sx={{ color: '#A0AEC0', mt: 1, display: 'block' }}>
+                  {rateSource === 'month'
+                    ? `Для этого месяца зафиксированы: ${formatCurrency(monthInfo.hourly_rate)} / час, ${toNum(monthInfo.commission_percent)}%`
+                    : 'Месяц ещё не сохраняли — расчёт по ставкам из профиля'}
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              {/* SECTION: Month payroll */}
+              <Box>
+                <SectionTitle icon="calendar_month">Зарплата за месяц</SectionTitle>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+                  <TextField
+                    label="Часы"
+                    size="small"
+                    type="number"
+                    value={monthForm.hours}
+                    onChange={(event) => setMonthForm((prev) => ({ ...prev, hours: event.target.value }))}
+                    onBlur={() => persist('month')}
+                    slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
+                  />
+                  <TextField
+                    label="Бонус"
+                    size="small"
+                    type="number"
+                    value={monthForm.bonus}
+                    onChange={(event) => setMonthForm((prev) => ({ ...prev, bonus: event.target.value }))}
+                    onBlur={() => persist('month')}
+                    slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
+                  />
+                </Box>
+
+                {/* Pay formula breakdown */}
+                <Box
+                  sx={{
+                    bgcolor: '#F7FAFC',
+                    borderRadius: 2.5,
+                    p: 2,
+                    border: '1px solid #EDF2F7',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="body2" sx={{ color: '#4A5568' }}>
+                        <span style={{ color: '#A0AEC0' }}>Часы:</span> {hours} ч × {formatCurrency(rate)}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#2D3748' }}>
+                        {formatCurrency(hoursPay)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="body2" sx={{ color: '#4A5568' }}>
+                        <span style={{ color: '#A0AEC0' }}>Продажи:</span> {percent}% от {formatCurrency(sales)}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#2D3748' }}>
+                        {formatCurrency(salesPay)}
+                      </Typography>
+                    </Box>
+                    {bonus > 0 && (
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="body2" sx={{ color: '#4A5568' }}>
+                          <span style={{ color: '#A0AEC0' }}>Бонус</span>
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#2D3748' }}>
+                          {formatCurrency(bonus)}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+
+                  <Divider sx={{ my: 1.5 }} />
+
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1A202C' }}>
+                      Итого
+                    </Typography>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        fontWeight: 800,
+                        color: '#CC5E33',
+                        fontSize: '1.1rem',
+                      }}
+                    >
+                      {formatCurrency(livePay)}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
-              {(detail.leaves || []).length === 0 ? (
-                <Typography variant="body2" sx={{ color: '#718096' }}>Нет отсутствий в этом месяце</Typography>
-              ) : (
-                (detail.leaves || []).map((item) => (
-                  <Box
-                    key={item.id}
-                    component="button"
-                    type="button"
-                    onClick={() => openLeave(item.kind, item)}
+
+              {/* Save button */}
+              {(profileDirty || monthDirty) && (
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="contained"
+                    onClick={() => persist('all', { toast: true })}
+                    disabled={saving}
                     sx={{
-                      display: 'block',
-                      width: '100%',
-                      textAlign: 'left',
-                      border: 0,
-                      bgcolor: 'transparent',
-                      cursor: 'pointer',
-                      py: 0.75,
-                      px: 0,
-                      fontFamily: 'inherit',
-                      '&:hover': { color: '#CC5E33' },
+                      borderRadius: '10px',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      px: 4,
                     }}
                   >
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'inherit' }}>
-                      {KIND_LABELS[item.kind] || item.kind} {formatIsoRange(item.date_from, item.date_to)}
-                    </Typography>
-                    {item.comment ? (
-                      <Typography variant="caption" sx={{ color: '#718096' }}>{item.comment}</Typography>
-                    ) : null}
-                  </Box>
-                ))
+                    {saving ? <CircularProgress size={22} /> : 'Сохранить'}
+                  </Button>
+                </Box>
               )}
+
+              <Divider />
+
+              {/* SECTION: Leaves */}
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
+                  <SectionTitle icon="beach_access">Отпуска / отгулы</SectionTitle>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => openLeave('vacation')}
+                      sx={{ textTransform: 'none', borderRadius: '8px', fontSize: '0.78rem' }}
+                    >
+                      + отпуск
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                      onClick={() => openLeave('time_off')}
+                      sx={{ textTransform: 'none', borderRadius: '8px', fontSize: '0.78rem' }}
+                    >
+                      + отгул
+                    </Button>
+                  </Box>
+                </Box>
+                {(detail.leaves || []).length === 0 ? (
+                  <Typography variant="body2" sx={{ color: '#A0AEC0', mt: 0.5, fontStyle: 'italic' }}>
+                    Нет отсутствий в этом месяце
+                  </Typography>
+                ) : (
+                  <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    {(detail.leaves || []).map((item) => (
+                      <Box
+                        key={item.id}
+                        component="button"
+                        type="button"
+                        onClick={() => openLeave(item.kind, item)}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          width: '100%',
+                          textAlign: 'left',
+                          border: '1px solid #EDF2F7',
+                          borderRadius: '8px',
+                          bgcolor: '#FAFBFC',
+                          cursor: 'pointer',
+                          py: 1,
+                          px: 1.5,
+                          fontFamily: 'inherit',
+                          transition: 'all 0.15s',
+                          '&:hover': {
+                            borderColor: '#CC5E33',
+                            bgcolor: 'rgba(204, 94, 51, 0.04)',
+                          },
+                        }}
+                      >
+                        <Chip
+                          size="small"
+                          label={KIND_LABELS[item.kind] || item.kind}
+                          sx={{
+                            bgcolor: item.kind === 'vacation' ? '#90A4AE' : 'rgba(204, 94, 51, 0.35)',
+                            color: item.kind === 'vacation' ? '#FFFFFF' : '#8B3A1D',
+                            fontWeight: 600,
+                            fontSize: '0.7rem',
+                            height: 22,
+                          }}
+                        />
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#2D3748' }}>
+                          {formatIsoRange(item.date_from, item.date_to)}
+                        </Typography>
+                        {item.comment && (
+                          <Typography variant="caption" sx={{ color: '#A0AEC0', ml: 'auto' }}>{item.comment}</Typography>
+                        )}
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
             </Box>
           </Box>
         )}

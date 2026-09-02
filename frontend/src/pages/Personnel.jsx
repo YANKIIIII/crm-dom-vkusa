@@ -1,4 +1,4 @@
-import { Box, Button, IconButton, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Button, IconButton, Paper, Tab, Tabs, Typography } from '@mui/material';
 import ChevronLeft from '@mui/icons-material/ChevronLeft';
 import ChevronRight from '@mui/icons-material/ChevronRight';
 import { useMemo, useState } from 'react';
@@ -41,29 +41,48 @@ const Personnel = () => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          mb: 2,
+          mb: 3,
           gap: 2,
           flexWrap: 'wrap',
         }}
       >
-        <Typography variant="h4">Персонал</Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <span className="material-icons" style={{ fontSize: 28, color: '#CC5E33' }} aria-hidden="true">badge</span>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#1A202C' }}>Персонал</Typography>
+        </Box>
+
+        {/* Month picker */}
+        <Paper
+          elevation={0}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            bgcolor: '#F7FAFC',
+            borderRadius: '12px',
+            border: '1px solid #EDF2F7',
+            px: 1,
+            py: 0.25,
+          }}
+        >
           <IconButton size="small" aria-label="Предыдущий месяц" onClick={() => shiftMonth(-1)}>
-            <ChevronLeft />
+            <ChevronLeft sx={{ fontSize: 20 }} />
           </IconButton>
           <Typography
             sx={{
-              minWidth: 180,
+              minWidth: 160,
               textAlign: 'center',
-              fontWeight: 600,
+              fontWeight: 700,
               textTransform: 'capitalize',
-              color: '#1A202C',
+              color: '#2D3748',
+              fontSize: '0.95rem',
+              userSelect: 'none',
             }}
           >
             {MONTHS[month - 1]} {year}
           </Typography>
           <IconButton size="small" aria-label="Следующий месяц" onClick={() => shiftMonth(1)}>
-            <ChevronRight />
+            <ChevronRight sx={{ fontSize: 20 }} />
           </IconButton>
           {!isCurrent && (
             <Button
@@ -71,25 +90,49 @@ const Personnel = () => {
                 setYear(now.year);
                 setMonth(now.month);
               }}
-              sx={{ textTransform: 'none', ml: 1 }}
+              size="small"
+              sx={{ textTransform: 'none', fontWeight: 600, ml: 0.5, fontSize: '0.78rem', borderRadius: '8px' }}
             >
-              Текущий месяц
+              Сейчас
             </Button>
           )}
-        </Box>
+        </Paper>
       </Box>
 
       <Tabs
         value={tab}
         onChange={(_event, next) => setTab(next)}
         sx={{
-          mb: 2,
-          borderBottom: '1px solid #EDF2F7',
-          '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, minHeight: 48 },
+          mb: 2.5,
+          '& .MuiTabs-indicator': {
+            height: 3,
+            borderRadius: '3px 3px 0 0',
+            bgcolor: '#CC5E33',
+          },
+          '& .MuiTab-root': {
+            textTransform: 'none',
+            fontWeight: 600,
+            minHeight: 48,
+            fontSize: '0.9rem',
+            color: '#718096',
+            '&.Mui-selected': { color: '#CC5E33' },
+          },
         }}
       >
-        <Tab label="Сотрудники" id="personnel-tab-employees" aria-controls="personnel-panel-employees" />
-        <Tab label="Отпуска / отгулы" id="personnel-tab-leaves" aria-controls="personnel-panel-leaves" />
+        <Tab
+          label="Сотрудники"
+          id="personnel-tab-employees"
+          aria-controls="personnel-panel-employees"
+          icon={<span className="material-icons" style={{ fontSize: 18 }} aria-hidden="true">people</span>}
+          iconPosition="start"
+        />
+        <Tab
+          label="Отпуска / отгулы"
+          id="personnel-tab-leaves"
+          aria-controls="personnel-panel-leaves"
+          icon={<span className="material-icons" style={{ fontSize: 18 }} aria-hidden="true">event_note</span>}
+          iconPosition="start"
+        />
       </Tabs>
 
       {tab === 0 ? (
