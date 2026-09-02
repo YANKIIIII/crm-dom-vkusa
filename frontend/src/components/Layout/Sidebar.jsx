@@ -15,6 +15,7 @@ const menuItems = [
   { text: 'Задачи', icon: 'view_kanban', path: '/tasks', module: 'tasks' },
   { text: 'Склад', icon: 'inventory_2', path: '/warehouse', module: 'warehouse' },
   { text: 'Справочники', icon: 'menu_book', path: '/references', module: 'references' },
+  { text: 'Персонал', icon: 'badge', path: '/personnel', module: 'personnel' },
   { text: 'Пользователи', icon: 'group', path: '/users', module: 'users' },
   { text: 'Журнал', icon: 'history', path: '/audit', module: 'audit' },
 ];

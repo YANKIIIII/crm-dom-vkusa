@@ -82,7 +82,7 @@ export function unwrapList(payload) {
 }
 
 export const ALL_MODULES = [
-  'analytics', 'orders', 'clients', 'tasks', 'warehouse', 'references', 'users', 'audit',
+  'analytics', 'orders', 'clients', 'tasks', 'warehouse', 'references', 'personnel', 'users', 'audit',
 ];
 
 export const GRANTABLE_MODULES = [
@@ -103,6 +103,7 @@ const MODULE_HOME = [
   ['tasks', '/tasks'],
   ['warehouse', '/warehouse'],
   ['references', '/references'],
+  ['personnel', '/personnel'],
   ['users', '/users'],
   ['audit', '/audit'],
 ];

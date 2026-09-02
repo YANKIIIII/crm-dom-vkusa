@@ -28,6 +28,9 @@ const ENTITY_LABELS = {
   product_card: 'Товар',
   stock_item: 'Склад',
   user: 'Пользователь',
+  personnel_profile: 'Профиль сотрудника',
+  personnel_month: 'Зарплата за месяц',
+  personnel_leave: 'Отпуск / отгул',
 };
 const ACTION_OPTIONS = Object.keys(ACTION_LABELS);
 const ENTITY_OPTIONS = Object.keys(ENTITY_LABELS);

@@ -12,6 +12,7 @@ import Warehouse from './pages/Warehouse';
 import Users from './pages/Users';
 import AuditLog from './pages/AuditLog';
 import References from './pages/References';
+import Personnel from './pages/Personnel';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 
@@ -54,6 +55,7 @@ function App() {
           <Route path="warehouse" element={<RoleRoute module="warehouse"><Warehouse /></RoleRoute>} />
           <Route path="catalog" element={<Navigate to="/warehouse" replace />} />
           <Route path="references" element={<RoleRoute module="references"><References /></RoleRoute>} />
+          <Route path="personnel" element={<RoleRoute module="personnel"><Personnel /></RoleRoute>} />
           <Route path="users" element={<RoleRoute module="users"><Users /></RoleRoute>} />
           <Route path="audit" element={<RoleRoute module="audit"><AuditLog /></RoleRoute>} />
         </Route>
