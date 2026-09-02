@@ -12,6 +12,7 @@ const menuItems = [
   { text: 'Аналитика', icon: 'analytics', path: '/', module: 'analytics' },
   { text: 'Заказы', icon: 'shopping_bag', path: '/orders', module: 'orders' },
   { text: 'Клиенты', icon: 'person', path: '/clients', module: 'clients' },
+  { text: 'Задачи', icon: 'view_kanban', path: '/tasks', module: 'tasks' },
   { text: 'Склад', icon: 'inventory_2', path: '/warehouse', module: 'warehouse' },
   { text: 'Справочники', icon: 'menu_book', path: '/references', module: 'references' },
   { text: 'Пользователи', icon: 'group', path: '/users', module: 'users' },

@@ -82,23 +82,25 @@ export function unwrapList(payload) {
 }
 
 export const ALL_MODULES = [
-  'analytics', 'orders', 'clients', 'warehouse', 'references', 'users', 'audit',
+  'analytics', 'orders', 'clients', 'tasks', 'warehouse', 'references', 'users', 'audit',
 ];
 
 export const GRANTABLE_MODULES = [
   { key: 'analytics', label: 'Аналитика' },
   { key: 'orders', label: 'Заказы' },
   { key: 'clients', label: 'Клиенты' },
+  { key: 'tasks', label: 'Задачи' },
   { key: 'warehouse', label: 'Склад' },
   { key: 'references', label: 'Справочники' },
 ];
 
-export const SELLER_DEFAULT_MODULES = ['orders', 'clients', 'warehouse'];
+export const SELLER_DEFAULT_MODULES = ['orders', 'clients', 'tasks', 'warehouse'];
 
 const MODULE_HOME = [
   ['analytics', '/'],
   ['orders', '/orders'],
   ['clients', '/clients'],
+  ['tasks', '/tasks'],
   ['warehouse', '/warehouse'],
   ['references', '/references'],
   ['users', '/users'],

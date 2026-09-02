@@ -7,6 +7,7 @@ import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
 import Clients from './pages/Clients';
 import ClientDetail from './pages/ClientDetail';
+import Tasks from './pages/Tasks';
 import Warehouse from './pages/Warehouse';
 import Users from './pages/Users';
 import AuditLog from './pages/AuditLog';
@@ -49,6 +50,7 @@ function App() {
           <Route path="orders/:id" element={<RoleRoute module="orders"><OrderDetail /></RoleRoute>} />
           <Route path="clients" element={<RoleRoute module="clients"><Clients /></RoleRoute>} />
           <Route path="clients/:id" element={<RoleRoute module="clients"><ClientDetail /></RoleRoute>} />
+          <Route path="tasks" element={<RoleRoute module="tasks"><Tasks /></RoleRoute>} />
           <Route path="warehouse" element={<RoleRoute module="warehouse"><Warehouse /></RoleRoute>} />
           <Route path="catalog" element={<Navigate to="/warehouse" replace />} />
           <Route path="references" element={<RoleRoute module="references"><References /></RoleRoute>} />

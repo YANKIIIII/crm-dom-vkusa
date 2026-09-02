@@ -24,6 +24,7 @@ const ENTITY_LABELS = {
   order: 'Заказ',
   order_item: 'Позиция заказа',
   client: 'Клиент',
+  task_card: 'Задача',
   product_card: 'Товар',
   stock_item: 'Склад',
   user: 'Пользователь',
