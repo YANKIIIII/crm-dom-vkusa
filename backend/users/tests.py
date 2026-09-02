@@ -194,6 +194,27 @@ def test_refresh_rotates_and_rejects_old_token():
 
 
 @pytest.mark.django_db
+def test_refresh_stamps_password_hash_when_old_refresh_lacks_it():
+    from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
+    from rest_framework_simplejwt.utils import get_md5_hash_password
+
+    user = User.objects.create_user(
+        username='oldjwt', email='oj@test.com', password='pwd', role='seller',
+    )
+    refresh = RefreshToken.for_user(user)
+    refresh.payload.pop('hash_password', None)
+    rotated = APIClient().post('/api/v1/token/refresh/', {'refresh': str(refresh)})
+    assert rotated.status_code == 200
+    access = AccessToken(rotated.data['access'])
+    user.refresh_from_db()
+    assert access['hash_password'] == get_md5_hash_password(user.password)
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f'Bearer {rotated.data["access"]}')
+    me = client.get('/api/v1/users/users/me/')
+    assert me.status_code == 200
+
+
+@pytest.mark.django_db
 def test_create_manager_creates_usable_account(capsys):
     call_command(
         'create_manager',

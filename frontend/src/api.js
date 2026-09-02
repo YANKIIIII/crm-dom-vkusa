@@ -22,6 +22,7 @@ const REFRESH_LOCK = 'crm-jwt-refresh';
 const AUTH_CHANNEL = 'crm-auth';
 
 let loggedOut = false;
+let sessionEpoch = 0;
 let refreshInFlight = null;
 const authChannel = typeof BroadcastChannel !== 'undefined'
   ? new BroadcastChannel(AUTH_CHANNEL)
@@ -31,8 +32,9 @@ const clearSession = () => {
   AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
 };
 
-const applyTokens = (access, refresh) => {
+const applyTokens = (access, refresh, epoch) => {
   if (loggedOut) return;
+  if (epoch !== undefined && epoch !== sessionEpoch) return;
   if (access) localStorage.setItem('access_token', access);
   if (refresh) localStorage.setItem('refresh_token', refresh);
 };
@@ -69,6 +71,7 @@ api.interceptors.request.use(
 
 const logout = async () => {
   loggedOut = true;
+  sessionEpoch += 1;
   const refresh = localStorage.getItem('refresh_token');
   clearSession();
   authChannel?.postMessage({ type: 'logout' });
@@ -92,9 +95,10 @@ const withRefreshLock = (fn) => {
 };
 
 const refreshAccessToken = (failedAccess) => {
+  const epoch = sessionEpoch;
   if (!refreshInFlight) {
     refreshInFlight = withRefreshLock(async () => {
-      if (loggedOut) {
+      if (loggedOut || epoch !== sessionEpoch) {
         throw new Error('logged out');
       }
       const currentAccess = localStorage.getItem('access_token');
@@ -106,7 +110,10 @@ const refreshAccessToken = (failedAccess) => {
         throw new Error('no refresh');
       }
       const res = await api.post('/token/refresh/', { refresh: refreshToken });
-      applyTokens(res.data.access, res.data.refresh);
+      if (loggedOut || epoch !== sessionEpoch) {
+        throw new Error('logged out');
+      }
+      applyTokens(res.data.access, res.data.refresh, epoch);
       authChannel?.postMessage({
         type: 'tokens',
         access: res.data.access,
@@ -145,6 +152,7 @@ api.interceptors.response.use(
 );
 
 const beginSession = () => {
+  sessionEpoch += 1;
   loggedOut = false;
 };
 

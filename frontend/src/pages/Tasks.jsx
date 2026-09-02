@@ -1,5 +1,6 @@
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   closestCorners,
   useDroppable,
@@ -8,6 +9,7 @@ import {
 } from '@dnd-kit/core';
 import {
   SortableContext,
+  arrayMove,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
@@ -52,6 +54,135 @@ const EMPTY_FORM = {
 const cardDndId = (id) => `card-${id}`;
 const listDndId = (id) => `list-${id}`;
 
+const COLUMN_TONE = {
+  todo: { bar: '#A0AEC0', wash: '#F7FAFC' },
+  doing: { bar: '#CC5E33', wash: '#FBF6F3' },
+  done: { bar: '#2F855A', wash: '#F3FAF6' },
+};
+
+const Icon = ({ name, size = 15 }) => (
+  <span className="material-icons" style={{ fontSize: size, lineHeight: 1 }} aria-hidden="true">{name}</span>
+);
+
+const findCardIn = (board, dndId) => {
+  const pk = Number(String(dndId).replace('card-', ''));
+  for (const column of board?.lists || []) {
+    const card = (column.cards || []).find((item) => item.id === pk);
+    if (card) return { card, column };
+  }
+  return null;
+};
+
+const resolveDrop = (board, activeId, overId) => {
+  const source = findCardIn(board, activeId);
+  if (!source || overId == null) return null;
+  if (String(overId).startsWith('list-')) {
+    const destListId = Number(String(overId).replace('list-', ''));
+    const destCol = board.lists.find((column) => column.id === destListId);
+    if (!destCol) return null;
+    if (source.column.id === destListId) return null;
+    return { destListId, destIndex: destCol.cards.length };
+  }
+  const dest = findCardIn(board, overId);
+  if (!dest) return null;
+  return {
+    destListId: dest.column.id,
+    destIndex: dest.column.cards.findIndex((item) => item.id === dest.card.id),
+  };
+};
+
+const moveCardInBoard = (board, cardId, destListId, destIndex) => {
+  const lists = board.lists.map((column) => ({
+    ...column,
+    cards: [...(column.cards || [])],
+  }));
+  const sourceCol = lists.find((column) => column.cards.some((item) => item.id === cardId));
+  const destCol = lists.find((column) => column.id === destListId);
+  if (!sourceCol || !destCol) return board;
+  const fromIndex = sourceCol.cards.findIndex((item) => item.id === cardId);
+  if (fromIndex < 0) return board;
+  if (sourceCol.id === destCol.id) {
+    if (fromIndex === destIndex) return board;
+    sourceCol.cards = arrayMove(sourceCol.cards, fromIndex, destIndex);
+    return { ...board, lists };
+  }
+  const [card] = sourceCol.cards.splice(fromIndex, 1);
+  const index = Math.max(0, Math.min(destIndex, destCol.cards.length));
+  destCol.cards.splice(index, 0, { ...card, list: destListId });
+  return { ...board, lists };
+};
+
+const ChipLabel = ({ icon, text }) => (
+  <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+    <Icon name={icon} size={14} />
+    {text}
+  </Box>
+);
+
+const chipSx = {
+  height: 24,
+  borderRadius: '6px',
+  fontWeight: 500,
+  '& .MuiChip-label': { px: 0.75 },
+};
+
+const TaskCardFace = ({ card, columnCode, canOrders, canClients, onEdit }) => {
+  const overdue = isOverdue(card.due_date, columnCode);
+  const clientName = `${card.client?.last_name || ''} ${card.client?.first_name || ''}`.trim();
+  return (
+    <>
+      <Typography variant="body2" fontWeight={600} sx={{ lineHeight: 1.35, color: '#1A202C' }}>
+        {card.title}
+      </Typography>
+      {(card.due_date || card.order || card.client) && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1.25 }}>
+          {card.due_date && (
+            <Chip
+              size="small"
+              label={<ChipLabel icon="event" text={formatDate(card.due_date)} />}
+              color={overdue ? 'error' : 'default'}
+              variant={overdue ? 'filled' : 'outlined'}
+              sx={chipSx}
+            />
+          )}
+          {card.order && (
+            canOrders && onEdit ? (
+              <Chip
+                size="small"
+                label={<ChipLabel icon="shopping_bag" text={`#${card.order.order_number}`} />}
+                component={RouterLink}
+                to={`/orders/${card.order.id}`}
+                onClick={(event) => event.stopPropagation()}
+                clickable
+                variant="outlined"
+                sx={chipSx}
+              />
+            ) : (
+              <Chip size="small" label={<ChipLabel icon="shopping_bag" text={`#${card.order.order_number}`} />} variant="outlined" sx={chipSx} />
+            )
+          )}
+          {card.client && (
+            canClients && onEdit ? (
+              <Chip
+                size="small"
+                label={<ChipLabel icon="person" text={clientName} />}
+                component={RouterLink}
+                to={`/clients/${card.client.id}`}
+                onClick={(event) => event.stopPropagation()}
+                clickable
+                variant="outlined"
+                sx={chipSx}
+              />
+            ) : (
+              <Chip size="small" label={<ChipLabel icon="person" text={clientName} />} variant="outlined" sx={chipSx} />
+            )
+          )}
+        </Box>
+      )}
+    </>
+  );
+};
+
 const SortableTaskCard = ({ card, columnCode, onEdit, canOrders, canClients }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: cardDndId(card.id),
@@ -60,7 +191,7 @@ const SortableTaskCard = ({ card, columnCode, onEdit, canOrders, canClients }) =
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1,
+    opacity: isDragging ? 0 : 1,
   };
   return (
     <Paper
@@ -69,61 +200,118 @@ const SortableTaskCard = ({ card, columnCode, onEdit, canOrders, canClients }) =
       {...attributes}
       {...listeners}
       onClick={() => onEdit(card)}
-      sx={{ p: 1.5, mb: 1, cursor: 'grab' }}
+      sx={{
+        p: 1.5,
+        mb: 1,
+        cursor: 'grab',
+        borderRadius: '12px',
+        border: '1px solid #EDF2F7',
+        boxShadow: '0 1px 2px rgba(26, 32, 44, 0.04)',
+        transition: 'border-color 150ms ease, box-shadow 150ms ease',
+        '&:hover': {
+          borderColor: '#E2E8F0',
+          boxShadow: '0 8px 18px rgba(26, 32, 44, 0.08)',
+        },
+      }}
     >
-      <Typography variant="body2" fontWeight={600}>{card.title}</Typography>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-        {card.due_date && (
-          <Chip
-            size="small"
-            label={formatDate(card.due_date)}
-            color={isOverdue(card.due_date, columnCode) ? 'error' : 'default'}
-          />
-        )}
-        {card.order && (
-          canOrders ? (
-            <Chip
-              size="small"
-              label={`#${card.order.order_number}`}
-              component={RouterLink}
-              to={`/orders/${card.order.id}`}
-              onClick={(event) => event.stopPropagation()}
-              clickable
-            />
-          ) : (
-            <Chip size="small" label={`#${card.order.order_number}`} />
-          )
-        )}
-        {card.client && (
-          canClients ? (
-            <Chip
-              size="small"
-              label={`${card.client.last_name || ''} ${card.client.first_name || ''}`.trim()}
-              component={RouterLink}
-              to={`/clients/${card.client.id}`}
-              onClick={(event) => event.stopPropagation()}
-              clickable
-            />
-          ) : (
-            <Chip
-              size="small"
-              label={`${card.client.last_name || ''} ${card.client.first_name || ''}`.trim()}
-            />
-          )
-        )}
-      </Box>
+      <TaskCardFace
+        card={card}
+        columnCode={columnCode}
+        canOrders={canOrders}
+        canClients={canClients}
+        onEdit={onEdit}
+      />
     </Paper>
   );
 };
 
-const DroppableColumn = ({ column, children }) => {
-  const { setNodeRef } = useDroppable({
+const DroppableColumn = ({ column, children, onAdd }) => {
+  const { setNodeRef, isOver } = useDroppable({
     id: listDndId(column.id),
     data: { type: 'list', listId: column.id },
   });
+  const tone = COLUMN_TONE[column.code] || COLUMN_TONE.todo;
+  const count = (column.cards || []).length;
   return (
-    <Paper ref={setNodeRef} sx={{ flex: '1 1 0', minWidth: 260, p: 1.5, bgcolor: '#EDF2F7' }}>
-      {children}
+    <Paper
+      ref={setNodeRef}
+      sx={{
+        flex: '1 1 0',
+        minWidth: 280,
+        maxWidth: 360,
+        display: 'flex',
+        flexDirection: 'column',
+        height: { xs: 420, md: 'calc(100vh - 220px)' },
+        minHeight: 360,
+        p: 0,
+        overflow: 'hidden',
+        bgcolor: isOver ? tone.wash : '#EEF2F6',
+        borderRadius: '16px',
+        boxShadow: 'none',
+        border: isOver ? `1px solid ${tone.bar}` : '1px solid transparent',
+        transition: 'background-color 150ms ease, border-color 150ms ease',
+      }}
+    >
+      <Box sx={{ height: 4, bgcolor: tone.bar, flexShrink: 0 }} />
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.75, pt: 1.5, pb: 1 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1A202C', letterSpacing: 0.2 }}>
+          {column.name}
+        </Typography>
+        <Box
+          sx={{
+            minWidth: 22,
+            height: 22,
+            px: 0.75,
+            borderRadius: '999px',
+            bgcolor: '#FFFFFF',
+            color: '#4A5568',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {count}
+        </Box>
+      </Box>
+      <Box sx={{ flex: 1, overflowY: 'auto', px: 1.25, pb: 0.5 }}>
+        {children}
+        {count === 0 && (
+          <Box
+            sx={{
+              border: '1px dashed #CBD5E0',
+              borderRadius: '12px',
+              py: 3,
+              px: 1.5,
+              textAlign: 'center',
+              color: '#A0AEC0',
+              fontSize: '0.8rem',
+              mb: 1,
+            }}
+          >
+            Пока пусто
+          </Box>
+        )}
+      </Box>
+      <Button
+        onClick={() => onAdd(column.id)}
+        startIcon={<Icon name="add" size={18} />}
+        sx={{
+          mx: 1.25,
+          mb: 1.25,
+          mt: 0.5,
+          minHeight: 40,
+          justifyContent: 'flex-start',
+          textTransform: 'none',
+          fontWeight: 600,
+          color: '#4A5568',
+          borderRadius: '10px',
+          '&:hover': { bgcolor: 'rgba(204, 94, 51, 0.08)', color: '#CC5E33' },
+        }}
+      >
+        Карточка
+      </Button>
     </Paper>
   );
 };
@@ -140,6 +328,7 @@ const Tasks = () => {
   const [board, setBoard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [activeDrag, setActiveDrag] = useState(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -151,6 +340,11 @@ const Tasks = () => {
   const [orderOptions, setOrderOptions] = useState([]);
   const [clientOptions, setClientOptions] = useState([]);
   const loadRequestId = useRef(0);
+  const boardRef = useRef(board);
+  const dragSnapshotRef = useRef(null);
+  const dragCardIdRef = useRef(null);
+  const skipClickRef = useRef(false);
+  boardRef.current = board;
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -239,43 +433,70 @@ const Tasks = () => {
     [boards],
   );
 
-  const findCard = (dndId) => {
-    const pk = Number(String(dndId).replace('card-', ''));
-    for (const column of board?.lists || []) {
-      const card = (column.cards || []).find((item) => item.id === pk);
-      if (card) return { card, column };
-    }
-    return null;
+  const onDragStart = ({ active }) => {
+    skipClickRef.current = true;
+    const found = findCardIn(boardRef.current, active.id);
+    dragSnapshotRef.current = boardRef.current;
+    dragCardIdRef.current = found?.card.id ?? null;
+    setActiveDrag(found ? { card: found.card, columnCode: found.column.code } : null);
   };
 
-  const onDragEnd = async ({ active, over }) => {
-    if (!over || !board) return;
-    const source = findCard(active.id);
-    if (!source) return;
-    let destListId = source.column.id;
-    let destIndex = source.column.cards.findIndex((item) => item.id === source.card.id);
-    if (String(over.id).startsWith('list-')) {
-      destListId = Number(String(over.id).replace('list-', ''));
-      const destCol = board.lists.find((column) => column.id === destListId);
-      destIndex = destCol ? destCol.cards.length : 0;
-    } else {
-      const dest = findCard(over.id);
-      if (!dest) return;
-      destListId = dest.column.id;
-      destIndex = dest.column.cards.findIndex((item) => item.id === dest.card.id);
-    }
-    if (destListId === source.column.id && destIndex === source.column.cards.findIndex((item) => item.id === source.card.id)) {
+  const onDragOver = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    setBoard((current) => {
+      if (!current) return current;
+      const drop = resolveDrop(current, active.id, over.id);
+      if (!drop) return current;
+      const source = findCardIn(current, active.id);
+      if (!source) return current;
+      const fromIndex = source.column.cards.findIndex((item) => item.id === source.card.id);
+      if (source.column.id === drop.destListId && fromIndex === drop.destIndex) return current;
+      return moveCardInBoard(current, source.card.id, drop.destListId, drop.destIndex);
+    });
+  };
+
+  const onDragEnd = async ({ over }) => {
+    setActiveDrag(null);
+    window.setTimeout(() => { skipClickRef.current = false; }, 0);
+    const current = boardRef.current;
+    const snapshot = dragSnapshotRef.current;
+    const cardId = dragCardIdRef.current;
+    dragSnapshotRef.current = null;
+    dragCardIdRef.current = null;
+    if (!current || !snapshot || !cardId) return;
+    if (!over) {
+      setBoard(snapshot);
       return;
     }
-    const snapshot = board;
+    const placed = findCardIn(current, cardDndId(cardId));
+    if (!placed) return;
+    const destIndex = placed.column.cards.findIndex((item) => item.id === placed.card.id);
+    const origin = findCardIn(snapshot, cardDndId(cardId));
+    if (
+      origin
+      && origin.column.id === placed.column.id
+      && origin.column.cards.findIndex((item) => item.id === origin.card.id) === destIndex
+    ) {
+      return;
+    }
     try {
-      await api.patch(`/tasks/cards/${source.card.id}/`, { list: destListId, position: destIndex });
-      await loadBoard(boardId);
+      await api.patch(`/tasks/cards/${placed.card.id}/`, {
+        list: placed.column.id,
+        position: destIndex,
+      });
     } catch (err) {
       setBoard(snapshot);
       notify(`Не удалось перенести карточку:\n${extractApiError(err)}`, 'error');
       await loadBoard(boardId);
     }
+  };
+
+  const onDragCancel = () => {
+    setActiveDrag(null);
+    if (dragSnapshotRef.current) setBoard(dragSnapshotRef.current);
+    dragSnapshotRef.current = null;
+    dragCardIdRef.current = null;
+    window.setTimeout(() => { skipClickRef.current = false; }, 0);
   };
 
   const openCreate = (listId) => {
@@ -287,6 +508,7 @@ const Tasks = () => {
   };
 
   const openEdit = (card) => {
+    if (skipClickRef.current) return;
     setEditing(card);
     setCreateListId(card.list);
     setForm({
@@ -357,10 +579,15 @@ const Tasks = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap' }}>
-        <Typography variant="h5" fontWeight={700}>Задачи</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', mb: 2.5, gap: 2, flexWrap: 'wrap' }}>
+        <Box>
+          <Typography variant="h5" fontWeight={700} sx={{ letterSpacing: -0.3 }}>Задачи</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
+            {isManager ? 'Личные доски сотрудников' : 'Ваша доска'}
+          </Typography>
+        </Box>
         {isManager && (
-          <Box sx={{ minWidth: 240 }}>
+          <Box sx={{ minWidth: 260 }}>
             <SearchableSelect
               id="task-board-owner"
               label="Доска"
@@ -376,11 +603,17 @@ const Tasks = () => {
       {loading && !board ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', overflowX: 'auto' }}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDragEnd={onDragEnd}
+          onDragCancel={onDragCancel}
+        >
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch', overflowX: 'auto', pb: 1 }}>
             {(board?.lists || []).map((column) => (
-              <DroppableColumn key={column.id} column={column}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>{column.name}</Typography>
+              <DroppableColumn key={column.id} column={column} onAdd={openCreate}>
                 <SortableContext
                   items={(column.cards || []).map((card) => cardDndId(card.id))}
                   strategy={verticalListSortingStrategy}
@@ -396,10 +629,31 @@ const Tasks = () => {
                     />
                   ))}
                 </SortableContext>
-                <Button size="small" onClick={() => openCreate(column.id)}>+ Карточка</Button>
               </DroppableColumn>
             ))}
           </Box>
+          <DragOverlay dropAnimation={null}>
+            {activeDrag ? (
+              <Paper
+                sx={{
+                  p: 1.5,
+                  width: 268,
+                  cursor: 'grabbing',
+                  borderRadius: '12px',
+                  transform: 'rotate(2deg)',
+                  boxShadow: '0 16px 32px rgba(26, 32, 44, 0.16)',
+                  border: '1px solid #E2E8F0',
+                }}
+              >
+                <TaskCardFace
+                  card={activeDrag.card}
+                  columnCode={activeDrag.columnCode}
+                  canOrders={canOrders}
+                  canClients={canClients}
+                />
+              </Paper>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       )}
 

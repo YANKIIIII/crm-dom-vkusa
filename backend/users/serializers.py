@@ -1,4 +1,9 @@
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
+from rest_framework_simplejwt.utils import get_md5_hash_password
 from users.access import ALL_MODULES, GRANTABLE_MODULES, effective_modules, stored_modules_for
 from .models import User, UserProfile
 
@@ -78,3 +83,29 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = '__all__'
+
+
+class TokenRefreshWithRevokeClaimSerializer(TokenRefreshSerializer):
+    """Stamp hash_password on rotated tokens so CHECK_REVOKE_TOKEN accepts them.
+
+    simplejwt copies claims from the presented refresh token. Refresh JWTs issued
+    before CHECK_REVOKE_TOKEN was enabled have no hash, so access copies fail
+    authentication (refresh 200, every API 401).
+    """
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        if not api_settings.CHECK_REVOKE_TOKEN:
+            return data
+        access = AccessToken(data['access'])
+        user = get_user_model().objects.get(
+            **{api_settings.USER_ID_FIELD: access[api_settings.USER_ID_CLAIM]},
+        )
+        digest = get_md5_hash_password(user.password)
+        access[api_settings.REVOKE_TOKEN_CLAIM] = digest
+        data['access'] = str(access)
+        if data.get('refresh'):
+            rotated = RefreshToken(data['refresh'])
+            rotated[api_settings.REVOKE_TOKEN_CLAIM] = digest
+            data['refresh'] = str(rotated)
+        return data

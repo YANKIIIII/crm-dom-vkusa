@@ -35,6 +35,9 @@ terminals/
 # Git worktrees (local isolated checkouts)
 .worktrees/
 
+# Brainstorm visual companion
+.superpowers/
+
 # Local compose volume overrides
 docker-compose.override.yml
 

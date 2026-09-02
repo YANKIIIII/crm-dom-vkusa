@@ -19,6 +19,7 @@ from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.views import TokenRefreshView
+from users.serializers import TokenRefreshWithRevokeClaimSerializer
 from users.views import LogoutView, TokenObtainPairWithAuditView
 
 urlpatterns = [
@@ -26,7 +27,11 @@ urlpatterns = [
 
     # JWT Auth
     path('api/v1/token/', TokenObtainPairWithAuditView.as_view(), name='token_obtain_pair'),
-    path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path(
+        'api/v1/token/refresh/',
+        TokenRefreshView.as_view(serializer_class=TokenRefreshWithRevokeClaimSerializer),
+        name='token_refresh',
+    ),
     path('api/v1/token/logout/', LogoutView.as_view(), name='token_logout'),
     
     # App API routes
