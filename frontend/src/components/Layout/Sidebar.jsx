@@ -1,17 +1,21 @@
-import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
+import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Alert, CircularProgress } from '@mui/material';
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { logout } from '../../api';
+import api, { logout } from '../../api';
 import { useFeedback } from '../../hooks/useFeedback';
+import { extractApiError, hasModule } from '../../utils';
+import BrandMark from '../BrandMark';
 
 const drawerWidth = 240;
 
 const menuItems = [
-  { text: 'Аналитика', icon: 'analytics', path: '/', managerOnly: true },
-  { text: 'Заказы', icon: 'shopping_bag', path: '/orders' },
-  { text: 'Клиенты', icon: 'person', path: '/clients' },
-  { text: 'Склад', icon: 'inventory_2', path: '/warehouse' },
-  { text: 'Пользователи', icon: 'group', path: '/users', managerOnly: true },
-  { text: 'Журнал', icon: 'history', path: '/audit', managerOnly: true },
+  { text: 'Аналитика', icon: 'analytics', path: '/', module: 'analytics' },
+  { text: 'Заказы', icon: 'shopping_bag', path: '/orders', module: 'orders' },
+  { text: 'Клиенты', icon: 'person', path: '/clients', module: 'clients' },
+  { text: 'Склад', icon: 'inventory_2', path: '/warehouse', module: 'warehouse' },
+  { text: 'Справочники', icon: 'menu_book', path: '/references', module: 'references' },
+  { text: 'Пользователи', icon: 'group', path: '/users', module: 'users' },
+  { text: 'Журнал', icon: 'history', path: '/audit', module: 'audit' },
 ];
 
 const drawerPaperSx = {
@@ -22,21 +26,67 @@ const drawerPaperSx = {
 };
 
 const Sidebar = ({ mobile = false, mobileOpen = false, onClose }) => {
-  const { confirm } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const userRole = localStorage.getItem('user_role');
   const userName = localStorage.getItem('user_name') || '';
-  const visibleMenuItems = menuItems.filter(item => !item.managerOnly || userRole === 'manager');
-  const roleLabel = userRole === 'manager' ? 'Руководитель' : 'Продавец';
+  const jobTitle = localStorage.getItem('user_job_title') || '';
+  const visibleMenuItems = menuItems.filter((item) => hasModule(item.module));
+  const roleLabel = jobTitle || (userRole === 'manager' ? 'Руководитель' : 'Сотрудник');
+  const [pwdOpen, setPwdOpen] = useState(false);
+  const [pwdCurrent, setPwdCurrent] = useState('');
+  const [pwd1, setPwd1] = useState('');
+  const [pwd2, setPwd2] = useState('');
+  const [pwdError, setPwdError] = useState(null);
+  const [pwdSaving, setPwdSaving] = useState(false);
 
   const handleLogout = async () => {
     if (!(await confirm('Выйти из системы?'))) return;
     await logout();
   };
 
+  const openPasswordDialog = () => {
+    setPwdCurrent('');
+    setPwd1('');
+    setPwd2('');
+    setPwdError(null);
+    setPwdOpen(true);
+  };
+
+  const handleChangePassword = async () => {
+    if (!pwdCurrent) {
+      setPwdError('Укажите текущий пароль');
+      return;
+    }
+    if (!pwd1) {
+      setPwdError('Укажите новый пароль');
+      return;
+    }
+    if (pwd1 !== pwd2) {
+      setPwdError('Пароли не совпадают');
+      return;
+    }
+    setPwdSaving(true);
+    setPwdError(null);
+    try {
+      await api.patch('/users/users/me/', {
+        current_password: pwdCurrent,
+        password: pwd1,
+      });
+      setPwdOpen(false);
+      notify('Пароль изменён. Войдите снова.', 'success');
+      await logout();
+    } catch (err) {
+      setPwdError(extractApiError(err));
+    } finally {
+      setPwdSaving(false);
+    }
+  };
+
   const drawerContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-        <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1A202C' }}>
+      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+        <BrandMark height={48} />
+        <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1A202C', lineHeight: 1.2 }}>
           Дом Вкуса
         </Typography>
       </Box>
@@ -83,6 +133,13 @@ const Sidebar = ({ mobile = false, mobileOpen = false, onClose }) => {
           <Typography variant="caption" sx={{ color: '#718096' }}>
             {roleLabel}
           </Typography>
+          <Button
+            size="small"
+            onClick={openPasswordDialog}
+            sx={{ mt: 0.5, px: 0, minWidth: 0, textTransform: 'none' }}
+          >
+            Сменить пароль
+          </Button>
         </Box>
         <ListItemButton
           onClick={handleLogout}
@@ -109,35 +166,86 @@ const Sidebar = ({ mobile = false, mobileOpen = false, onClose }) => {
     </Box>
   );
 
+  const passwordDialog = (
+    <Dialog open={pwdOpen} onClose={() => setPwdOpen(false)} maxWidth="xs" fullWidth>
+      <DialogTitle>Смена пароля</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+        {pwdError && (
+          <Alert severity="error" role="alert" aria-live="assertive">
+            {pwdError}
+          </Alert>
+        )}
+        <TextField
+          autoFocus
+          fullWidth
+          label="Текущий пароль"
+          type="password"
+          value={pwdCurrent}
+          onChange={(e) => setPwdCurrent(e.target.value)}
+          autoComplete="current-password"
+        />
+        <TextField
+          fullWidth
+          label="Новый пароль"
+          type="password"
+          value={pwd1}
+          onChange={(e) => setPwd1(e.target.value)}
+          autoComplete="new-password"
+        />
+        <TextField
+          fullWidth
+          label="Повторите пароль"
+          type="password"
+          value={pwd2}
+          onChange={(e) => setPwd2(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleChangePassword()}
+          autoComplete="new-password"
+        />
+      </DialogContent>
+      <DialogActions sx={{ p: 2 }}>
+        <Button onClick={() => setPwdOpen(false)} color="inherit">Отмена</Button>
+        <Button onClick={handleChangePassword} variant="contained" disabled={pwdSaving}>
+          {pwdSaving ? <CircularProgress size={22} /> : 'Сохранить'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   if (mobile) {
     return (
+      <>
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onClose={onClose}
+          ModalProps={{ keepMounted: true }}
+          sx={{
+            display: { xs: 'block', md: 'none' },
+            '& .MuiDrawer-paper': drawerPaperSx,
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+        {passwordDialog}
+      </>
+    );
+  }
+
+  return (
+    <>
       <Drawer
-        variant="temporary"
-        open={mobileOpen}
-        onClose={onClose}
-        ModalProps={{ keepMounted: true }}
+        variant="permanent"
         sx={{
-          display: { xs: 'block', md: 'none' },
+          display: { xs: 'none', md: 'block' },
+          width: drawerWidth,
+          flexShrink: 0,
           '& .MuiDrawer-paper': drawerPaperSx,
         }}
       >
         {drawerContent}
       </Drawer>
-    );
-  }
-
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        display: { xs: 'none', md: 'block' },
-        width: drawerWidth,
-        flexShrink: 0,
-        '& .MuiDrawer-paper': drawerPaperSx,
-      }}
-    >
-      {drawerContent}
-    </Drawer>
+      {passwordDialog}
+    </>
   );
 };
 

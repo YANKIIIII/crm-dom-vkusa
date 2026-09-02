@@ -19,6 +19,7 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
   const [price, setPrice] = useState('');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [priceFilter, setPriceFilter] = useState('');
   
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -38,8 +39,8 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
         const params = new URLSearchParams();
         if (search) params.append('search', search);
         if (category) params.append('category', category);
+        if (priceFilter) params.append('rrp_max', priceFilter);
         params.append('page', page);
-        // price filtering can be added later
 
         const res = await api.get(`/catalog/product_cards/?${params.toString()}`);
         if (cancelled) return;
@@ -65,12 +66,13 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
     return () => {
       cancelled = true;
     };
-  }, [open, page, search, category, listVersion, notify]);
+  }, [open, page, search, category, priceFilter, listVersion, notify]);
 
   const handleSearchClick = () => {
     setPage(1);
     setSearch(searchInput);
     setCategory(categoryInput);
+    setPriceFilter(price);
     setListVersion((v) => v + 1);
   };
 
@@ -135,9 +137,10 @@ const ProductSearchModal = ({ open, onClose, onAdd, categories }) => {
               <TextField
                 fullWidth
                 size="small"
-                placeholder="Цена"
+                placeholder="Цена до, РРЦ"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
+                slotProps={{ input: { 'aria-label': 'Цена до' } }}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
               />
             </Grid>

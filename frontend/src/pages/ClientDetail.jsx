@@ -7,7 +7,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
-import { extractApiError, formatCurrency, formatDate, GRILL_TYPE_LABELS } from '../utils';
+import { extractApiError, formatCurrency, formatDate, GRILL_TYPE_LABELS, CATALOG_PAGE_SIZE } from '../utils';
 import { useFeedback } from '../hooks/useFeedback';
 import SearchableSelect from '../components/SearchableSelect';
 
@@ -119,7 +119,7 @@ const ClientDetail = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const channelsRes = await api.get('/orders/sales_channels/').catch(() => ({ data: [] }));
+        const channelsRes = await api.get('/orders/sales_channels/', { params: { page_size: CATALOG_PAGE_SIZE } }).catch(() => ({ data: [] }));
         const channelList = channelsRes.data.results || channelsRes.data || [];
         setChannels(channelList);
 

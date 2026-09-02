@@ -9,10 +9,16 @@ import api from '../api';
 import { useFeedback } from '../hooks/useFeedback';
 import {
   PAGE_SIZE, PAGE_SIZE_OPTIONS, formatCurrency, formatDate, extractApiError,
-  toggleOrdering, buildListQuery,
+  toggleOrdering, buildListQuery, CATALOG_PAGE_SIZE, unwrapList, GRILL_TYPE_LABELS,
 } from '../utils';
 import SortableHeader from '../components/SortableHeader';
+import SearchableSelect from '../components/SearchableSelect';
 import TruncatedText from '../components/TruncatedText';
+
+const GRILL_TYPE_FILTERS = [
+  { value: '', label: 'Все' },
+  ...Object.entries(GRILL_TYPE_LABELS).map(([value, label]) => ({ value, label })),
+];
 
 const Clients = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,22 +32,38 @@ const Clients = () => {
   const urlPageSize = PAGE_SIZE_OPTIONS.includes(Number(searchParams.get('page_size')))
     ? Number(searchParams.get('page_size'))
     : PAGE_SIZE;
-  const urlDiscountMin = searchParams.get('discount_min') ?? '';
-  const urlDiscountMax = searchParams.get('discount_max') ?? '';
+  const urlGrillType = searchParams.get('grill_type') ?? '';
+  const urlChannel = searchParams.get('acquisition_source') ?? '';
   const urlPurchaseAfter = searchParams.get('last_purchase_after') ?? '';
   const urlPurchaseBefore = searchParams.get('last_purchase_before') ?? '';
   const page = urlPage1Based - 1;
 
   const [searchInput, setSearchInput] = useState(urlSearch);
   const [clients, setClients] = useState([]);
+  const [channels, setChannels] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setSearchInput(urlSearch);
   }, [urlSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/orders/sales_channels/', { params: { page_size: CATALOG_PAGE_SIZE } })
+      .then((response) => {
+        if (!cancelled) setChannels(unwrapList(response.data));
+      })
+      .catch(() => {
+        if (!cancelled) setChannels([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,8 +77,8 @@ const Clients = () => {
             search: urlSearch,
             ordering: urlOrdering,
             extra: {
-              discount_min: urlDiscountMin,
-              discount_max: urlDiscountMax,
+              grill_type: urlGrillType,
+              acquisition_source: urlChannel,
               last_purchase_after: urlPurchaseAfter,
               last_purchase_before: urlPurchaseBefore,
             },
@@ -66,8 +88,10 @@ const Clients = () => {
         setClients(response.data.results || response.data);
         setTotalCount(response.data.count || 0);
         setSelectedIds(new Set());
+        setLoadError(null);
       } catch (error) {
         if (!cancelled) {
+          setLoadError(extractApiError(error));
           notify(`Не удалось загрузить клиентов:\n${extractApiError(error)}`, 'error');
         }
       } finally {
@@ -78,7 +102,7 @@ const Clients = () => {
     return () => {
       cancelled = true;
     };
-  }, [urlSearch, urlPage1Based, urlPageSize, urlOrdering, urlDiscountMin, urlDiscountMax, urlPurchaseAfter, urlPurchaseBefore, notify]);
+  }, [urlSearch, urlPage1Based, urlPageSize, urlOrdering, urlGrillType, urlChannel, urlPurchaseAfter, urlPurchaseBefore, notify]);
 
   const updateUrl = (next) => {
     const params = new URLSearchParams();
@@ -86,12 +110,12 @@ const Clients = () => {
     params.set('page', String((next.page0Based ?? page) + 1));
     params.set('page_size', String(next.pageSize ?? urlPageSize));
     params.set('ordering', next.ordering ?? urlOrdering);
-    const discountMin = next.discountMin === undefined ? urlDiscountMin : next.discountMin;
-    const discountMax = next.discountMax === undefined ? urlDiscountMax : next.discountMax;
+    const grillType = next.grillType === undefined ? urlGrillType : next.grillType;
+    const channel = next.channel === undefined ? urlChannel : next.channel;
     const purchaseAfter = next.purchaseAfter === undefined ? urlPurchaseAfter : next.purchaseAfter;
     const purchaseBefore = next.purchaseBefore === undefined ? urlPurchaseBefore : next.purchaseBefore;
-    if (discountMin) params.set('discount_min', discountMin);
-    if (discountMax) params.set('discount_max', discountMax);
+    if (grillType) params.set('grill_type', grillType);
+    if (channel) params.set('acquisition_source', channel);
     if (purchaseAfter) params.set('last_purchase_after', purchaseAfter);
     if (purchaseBefore) params.set('last_purchase_before', purchaseBefore);
     setSearchParams(params);
@@ -166,8 +190,8 @@ const Clients = () => {
           search: urlSearch,
           ordering: urlOrdering,
           extra: {
-            discount_min: urlDiscountMin,
-            discount_max: urlDiscountMax,
+            grill_type: urlGrillType,
+            acquisition_source: urlChannel,
             last_purchase_after: urlPurchaseAfter,
             last_purchase_before: urlPurchaseBefore,
           },
@@ -212,24 +236,27 @@ const Clients = () => {
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             slotProps={{ input: { 'aria-label': 'Поиск клиентов' } }}
           />
-          <TextField
-            size="small"
-            type="number"
-            label="Скидка от"
-            sx={{ width: 110 }}
-            value={urlDiscountMin}
-            onChange={(e) => updateUrl({ search: urlSearch, page0Based: 0, discountMin: e.target.value })}
-            slotProps={{ htmlInput: { min: 0, max: 100 } }}
-          />
-          <TextField
-            size="small"
-            type="number"
-            label="Скидка до"
-            sx={{ width: 110 }}
-            value={urlDiscountMax}
-            onChange={(e) => updateUrl({ search: urlSearch, page0Based: 0, discountMax: e.target.value })}
-            slotProps={{ htmlInput: { min: 0, max: 100 } }}
-          />
+          <Box sx={{ minWidth: 180 }}>
+            <SearchableSelect
+              id="clients-grill-filter"
+              label="Тип гриля"
+              value={urlGrillType}
+              onChange={(value) => updateUrl({ search: urlSearch, page0Based: 0, grillType: value })}
+              options={GRILL_TYPE_FILTERS}
+            />
+          </Box>
+          <Box sx={{ minWidth: 200 }}>
+            <SearchableSelect
+              id="clients-channel-filter"
+              label="Канал продажи"
+              value={urlChannel}
+              onChange={(value) => updateUrl({ search: urlSearch, page0Based: 0, channel: value })}
+              options={[
+                { value: '', label: 'Все' },
+                ...channels.map((c) => ({ value: c.name, label: c.name })),
+              ]}
+            />
+          </Box>
           <TextField
             size="small"
             type="date"
@@ -305,6 +332,12 @@ const Clients = () => {
                 <TableRow>
                   <TableCell colSpan={colCount} align="center" sx={{ py: 4, color: '#718096' }}>
                     Загрузка…
+                  </TableCell>
+                </TableRow>
+              ) : loadError ? (
+                <TableRow>
+                  <TableCell colSpan={colCount} align="center" sx={{ py: 4, color: '#E53E3E' }}>
+                    Не удалось загрузить клиентов
                   </TableCell>
                 </TableRow>
               ) : clients.length === 0 ? (

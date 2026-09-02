@@ -20,6 +20,7 @@ export const formatDate = (value) => {
 
 export const PAGE_SIZE = 25;
 export const PAGE_SIZE_OPTIONS = [25, 50, 100];
+export const CATALOG_PAGE_SIZE = 100;
 
 export const GRILL_TYPE_LABELS = {
   charcoal: 'Угольный',
@@ -28,6 +29,88 @@ export const GRILL_TYPE_LABELS = {
   electric: 'Электрический',
   pellet: 'Пеллетный',
 };
+
+export const DEFAULT_ORDER_STATUSES = [
+  { code: 'reserved', name: 'Резерв', kind: 'open' },
+  { code: 'confirmed', name: 'Подтвержден', kind: 'open' },
+  { code: 'in_delivery', name: 'В доставке', kind: 'open' },
+  { code: 'completed', name: 'Завершен', kind: 'completed' },
+  { code: 'cancelled', name: 'Отменен', kind: 'cancelled' },
+];
+
+export function mapOrderStatuses(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const codes = new Set(list.map((row) => row.code));
+  const merged = [
+    ...DEFAULT_ORDER_STATUSES.filter((row) => !codes.has(row.code)),
+    ...list,
+  ];
+  return merged.map((row) => ({
+    ...row,
+    value: row.code,
+    label: row.name,
+  }));
+}
+
+export function isTerminalOrderStatus(status, statuses = []) {
+  const row = statuses.find((item) => item.value === status || item.code === status);
+  if (row?.kind) {
+    return row.kind === 'completed' || row.kind === 'cancelled';
+  }
+  return status === 'completed' || status === 'cancelled';
+}
+
+export function unwrapList(payload) {
+  if (!payload) return [];
+  if (Array.isArray(payload.results)) return payload.results;
+  if (Array.isArray(payload)) return payload;
+  return [];
+}
+
+export const ALL_MODULES = [
+  'analytics', 'orders', 'clients', 'warehouse', 'references', 'users', 'audit',
+];
+
+export const GRANTABLE_MODULES = [
+  { key: 'analytics', label: 'Аналитика' },
+  { key: 'orders', label: 'Заказы' },
+  { key: 'clients', label: 'Клиенты' },
+  { key: 'warehouse', label: 'Склад' },
+  { key: 'references', label: 'Справочники' },
+];
+
+export const SELLER_DEFAULT_MODULES = ['orders', 'clients', 'warehouse'];
+
+const MODULE_HOME = [
+  ['analytics', '/'],
+  ['orders', '/orders'],
+  ['clients', '/clients'],
+  ['warehouse', '/warehouse'],
+  ['references', '/references'],
+  ['users', '/users'],
+  ['audit', '/audit'],
+];
+
+export function readStoredModules() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('user_modules') || '[]');
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function hasModule(module) {
+  if (localStorage.getItem('user_role') === 'manager') return true;
+  const stored = readStoredModules();
+  const effective = stored.length ? stored : SELLER_DEFAULT_MODULES;
+  return effective.includes(module);
+}
+
+export function homePath() {
+  const match = MODULE_HOME.find(([module]) => hasModule(module));
+  return match ? match[1] : '/orders';
+}
 
 export function toggleOrdering(current, field, defaultDesc = false) {
   if (current === field) return `-${field}`;

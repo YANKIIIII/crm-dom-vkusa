@@ -7,7 +7,53 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to attach JWT token
+const AUTH_STORAGE_KEYS = [
+  'access_token',
+  'refresh_token',
+  'user_role',
+  'user_name',
+  'user_modules',
+  'user_job_title',
+  'user_username',
+];
+
+const AUTH_URLS = ['/token/', '/token/refresh/', '/token/logout/'];
+const REFRESH_LOCK = 'crm-jwt-refresh';
+const AUTH_CHANNEL = 'crm-auth';
+
+let loggedOut = false;
+let refreshInFlight = null;
+const authChannel = typeof BroadcastChannel !== 'undefined'
+  ? new BroadcastChannel(AUTH_CHANNEL)
+  : null;
+
+const clearSession = () => {
+  AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+};
+
+const applyTokens = (access, refresh) => {
+  if (loggedOut) return;
+  if (access) localStorage.setItem('access_token', access);
+  if (refresh) localStorage.setItem('refresh_token', refresh);
+};
+
+if (authChannel) {
+  authChannel.addEventListener('message', (event) => {
+    const payload = event.data || {};
+    if (payload.type === 'logout') {
+      loggedOut = true;
+      clearSession();
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      return;
+    }
+    if (payload.type === 'tokens') {
+      applyTokens(payload.access, payload.refresh);
+    }
+  });
+}
+
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
@@ -21,12 +67,11 @@ api.interceptors.request.use(
   }
 );
 
-// Endpoints where a 401 must not trigger a refresh attempt
-// (login failure or an invalid/expired refresh token itself).
-const AUTH_URLS = ['/token/', '/token/refresh/', '/token/logout/'];
-
 const logout = async () => {
+  loggedOut = true;
   const refresh = localStorage.getItem('refresh_token');
+  clearSession();
+  authChannel?.postMessage({ type: 'logout' });
   try {
     if (refresh) {
       await api.post('/token/logout/', { refresh });
@@ -34,29 +79,60 @@ const logout = async () => {
   } catch {
     // Local session is cleared even if the server already rejected the token.
   }
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('user_role');
-  localStorage.removeItem('user_name');
   if (window.location.pathname !== '/login') {
     window.location.href = '/login';
   }
 };
 
-// Response interceptor to handle token refresh (single attempt, then logout)
+const withRefreshLock = (fn) => {
+  if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+    return navigator.locks.request(REFRESH_LOCK, fn);
+  }
+  return fn();
+};
+
+const refreshAccessToken = (failedAccess) => {
+  if (!refreshInFlight) {
+    refreshInFlight = withRefreshLock(async () => {
+      if (loggedOut) {
+        throw new Error('logged out');
+      }
+      const currentAccess = localStorage.getItem('access_token');
+      if (currentAccess && currentAccess !== failedAccess) {
+        return currentAccess;
+      }
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) {
+        throw new Error('no refresh');
+      }
+      const res = await api.post('/token/refresh/', { refresh: refreshToken });
+      applyTokens(res.data.access, res.data.refresh);
+      authChannel?.postMessage({
+        type: 'tokens',
+        access: res.data.access,
+        refresh: res.data.refresh,
+      });
+      return res.data.access;
+    }).finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+};
+
 api.interceptors.response.use(
   response => response,
   async error => {
     const originalRequest = error.config;
     const isAuthUrl = AUTH_URLS.some(url => originalRequest?.url?.endsWith(url));
-    if (error.response?.status === 401 && !isAuthUrl && !originalRequest._retry) {
+    if (error.response?.status === 401 && !isAuthUrl && !originalRequest._retry && !loggedOut) {
       originalRequest._retry = true;
+      const failedAccess = localStorage.getItem('access_token');
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
-          const res = await api.post('/token/refresh/', { refresh: refreshToken });
-          localStorage.setItem('access_token', res.data.access);
-          originalRequest.headers['Authorization'] = `Bearer ${res.data.access}`;
+          const access = await refreshAccessToken(failedAccess);
+          originalRequest.headers['Authorization'] = `Bearer ${access}`;
           return api(originalRequest);
         } catch {
           // Refresh failed — fall through to logout
@@ -68,5 +144,9 @@ api.interceptors.response.use(
   }
 );
 
-export { logout };
+const beginSession = () => {
+  loggedOut = false;
+};
+
+export { logout, beginSession };
 export default api;

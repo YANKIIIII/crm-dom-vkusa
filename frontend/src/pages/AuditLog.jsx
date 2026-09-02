@@ -12,8 +12,24 @@ import SortableHeader from '../components/SortableHeader';
 import SearchableSelect from '../components/SearchableSelect';
 import TruncatedText from '../components/TruncatedText';
 
-const ACTION_OPTIONS = ['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'SYSTEM'];
-const ENTITY_OPTIONS = ['order', 'order_item', 'client', 'product_card', 'stock_item', 'user'];
+const ACTION_LABELS = {
+  CREATE: 'Создан',
+  UPDATE: 'Изменён',
+  DELETE: 'Удалён',
+  LOGIN: 'Вход',
+  LOGOUT: 'Выход',
+  SYSTEM: 'Система',
+};
+const ENTITY_LABELS = {
+  order: 'Заказ',
+  order_item: 'Позиция заказа',
+  client: 'Клиент',
+  product_card: 'Товар',
+  stock_item: 'Склад',
+  user: 'Пользователь',
+};
+const ACTION_OPTIONS = Object.keys(ACTION_LABELS);
+const ENTITY_OPTIONS = Object.keys(ENTITY_LABELS);
 
 const AuditLog = () => {
   const { notify } = useFeedback();
@@ -26,9 +42,12 @@ const AuditLog = () => {
   const [entityType, setEntityType] = useState('');
   const [dateAfter, setDateAfter] = useState('');
   const [dateBefore, setDateBefore] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     api.get(`/common/audit_logs/?${buildListQuery({
       page: page + 1,
       pageSize,
@@ -44,9 +63,16 @@ const AuditLog = () => {
         if (cancelled) return;
         setLogs(res.data.results || res.data);
         setTotalCount(res.data.count || 0);
+        setLoadError(null);
       })
       .catch((err) => {
-        if (!cancelled) notify(`Не удалось загрузить журнал:\n${extractApiError(err)}`, 'error');
+        if (!cancelled) {
+          setLoadError(extractApiError(err));
+          notify(`Не удалось загрузить журнал:\n${extractApiError(err)}`, 'error');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -65,7 +91,7 @@ const AuditLog = () => {
               label="Действие"
               value={action}
               onChange={(value) => { setAction(value); setPage(0); }}
-              options={[{ value: '', label: 'Все' }, ...ACTION_OPTIONS.map((value) => ({ value, label: value }))]}
+              options={[{ value: '', label: 'Все' }, ...ACTION_OPTIONS.map((value) => ({ value, label: ACTION_LABELS[value] }))]}
             />
           </Box>
           <Box sx={{ minWidth: 200 }}>
@@ -74,7 +100,7 @@ const AuditLog = () => {
               label="Сущность"
               value={entityType}
               onChange={(value) => { setEntityType(value); setPage(0); }}
-              options={[{ value: '', label: 'Все' }, ...ENTITY_OPTIONS.map((value) => ({ value, label: value }))]}
+              options={[{ value: '', label: 'Все' }, ...ENTITY_OPTIONS.map((value) => ({ value, label: ENTITY_LABELS[value] }))]}
             />
           </Box>
           <TextField
@@ -109,25 +135,34 @@ const AuditLog = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {logs.map((row) => (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#718096' }}>Загрузка…</TableCell>
+                </TableRow>
+              ) : loadError ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#E53E3E' }}>
+                    Не удалось загрузить журнал
+                  </TableCell>
+                </TableRow>
+              ) : logs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#718096' }}>Нет записей в журнале</TableCell>
+                </TableRow>
+              ) : logs.map((row) => (
                 <TableRow key={row.id} hover>
                   <TableCell sx={{ color: '#4A5568' }}>
                     {row.timestamp ? new Date(row.timestamp).toLocaleString('ru-RU') : '—'}
                   </TableCell>
                   <TableCell sx={{ color: '#1A202C', maxWidth: 180 }}><TruncatedText>{row.user_name || row.user || 'Система'}</TruncatedText></TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.action}</TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.entity_type}</TableCell>
+                  <TableCell sx={{ color: '#4A5568' }}>{ACTION_LABELS[row.action] || row.action}</TableCell>
+                  <TableCell sx={{ color: '#4A5568' }}>{ENTITY_LABELS[row.entity_type] || row.entity_type}</TableCell>
                   <TableCell sx={{ color: '#4A5568' }}>{row.entity_id}</TableCell>
                   <TableCell sx={{ color: '#4A5568', maxWidth: 360 }}>
                     <TruncatedText>{row.details ? JSON.stringify(row.details) : '—'}</TruncatedText>
                   </TableCell>
                 </TableRow>
               ))}
-              {logs.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#718096' }}>Нет записей в журнале</TableCell>
-                </TableRow>
-              )}
             </TableBody>
           </Table>
         </TableContainer>

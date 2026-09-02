@@ -1,99 +1,19 @@
 import {
-  Alert, Box, Paper, Grid, Typography, Button, TextField, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, Checkbox, Dialog,
-  DialogTitle, DialogContent, DialogActions, CircularProgress, List, ListItemButton,
-  ListItemText, InputAdornment,
+  Alert, Box, Paper, Typography, Button, CircularProgress,
 } from '@mui/material';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
-import { extractApiError, formatCurrency } from '../utils';
-import ProductPreviewTooltip from '../components/ProductPreviewTooltip';
+import { extractApiError, CATALOG_PAGE_SIZE, mapOrderStatuses, isTerminalOrderStatus, unwrapList } from '../utils';
 import ProductSearchModal from '../components/ProductSearchModal';
-import SearchableSelect from '../components/SearchableSelect';
+import ClientPickerDialog from '../components/ClientPickerDialog';
 import { useFeedback } from '../hooks/useFeedback';
-
-const ORDER_STATUSES = [
-  { value: 'reserved', label: 'Резерв' },
-  { value: 'confirmed', label: 'Подтвержден' },
-  { value: 'in_delivery', label: 'В доставке' },
-  { value: 'completed', label: 'Завершен' },
-  { value: 'cancelled', label: 'Отменен' },
-];
-
-const BASE_WRITABLE_FIELDS = [
-  'order_date',
-  'sales_channel',
-  'client',
-  'discount_percent',
-  'comment',
-  'delivery_service',
-  'tracking_number',
-  'status',
-];
-
-const writableFields = (includeSeller) => (
-  includeSeller ? [...BASE_WRITABLE_FIELDS, 'seller'] : BASE_WRITABLE_FIELDS
-);
-
-const emptyNewOrder = () => ({
-  items: [],
-  payments: [],
-  order_date: new Date().toISOString().slice(0, 10),
-  sales_channel: '',
-  status: 'reserved',
-  discount_percent: 0,
-  comment: '',
-  client: null,
-  seller: null,
-  delivery_service: null,
-  tracking_number: '',
-});
-
-const normalizeEmpty = (field, value) => {
-  if (
-    (field === 'sales_channel' || field === 'delivery_service' || field === 'client' || field === 'seller')
-    && (value === '' || value === undefined)
-  ) {
-    return null;
-  }
-  return value;
-};
-
-const pickWritable = (order, includeSeller) => {
-  const payload = {};
-  for (const field of writableFields(includeSeller)) {
-    const value = normalizeEmpty(field, order[field]);
-    if (value !== undefined) payload[field] = value;
-  }
-  return payload;
-};
-
-const diffWritable = (current, baseline, includeSeller) => {
-  const payload = {};
-  for (const field of writableFields(includeSeller)) {
-    const cur = normalizeEmpty(field, current[field]);
-    const base = normalizeEmpty(field, baseline?.[field]);
-    if (String(cur ?? '') !== String(base ?? '')) {
-      payload[field] = cur ?? null;
-    }
-  }
-  return payload;
-};
-
-const formatUserName = (user) => (
-  `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.username || '—'
-);
-
-const clientIdOf = (orderLike) => {
-  const value = orderLike?.client;
-  if (value && typeof value === 'object') {
-    return value.id ?? value.pk ?? null;
-  }
-  return value || null;
-};
-
-const isGrillProduct = (product) => String(product?.category_code || '').trim() === 'A';
+import {
+  emptyNewOrder, pickWritable, diffWritable, clientIdOf, isGrillProduct,
+} from './orderDetail/utils';
+import OrderDataTab from './orderDetail/OrderDataTab';
+import OrderItemsTab from './orderDetail/OrderItemsTab';
+import GrillClientDialog from './orderDetail/GrillClientDialog';
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -118,6 +38,7 @@ const OrderDetail = () => {
   const [paymentTypes, setPaymentTypes] = useState([]);
   const [catalogProducts, setCatalogProducts] = useState([]);
   const [sellers, setSellers] = useState([]);
+  const [orderStatuses, setOrderStatuses] = useState(() => mapOrderStatuses([]));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [mutatingItems, setMutatingItems] = useState(false);
@@ -126,22 +47,15 @@ const OrderDetail = () => {
 
   const [openProductDialog, setOpenProductDialog] = useState(false);
   const [openClientModal, setOpenClientModal] = useState(false);
-  const [openNewClientModal, setOpenNewClientModal] = useState(false);
   const [openGrillClientModal, setOpenGrillClientModal] = useState(false);
   const [pendingGrillProducts, setPendingGrillProducts] = useState([]);
   const [grillForm, setGrillForm] = useState({ first_name: '', last_name: '', phone: '' });
   const [grillSaving, setGrillSaving] = useState(false);
 
-  const [clientSearch, setClientSearch] = useState('');
-  const [clientResults, setClientResults] = useState([]);
-  const [clientSearchLoading, setClientSearchLoading] = useState(false);
   const [selectedClientName, setSelectedClientName] = useState('');
-  const [clientPhone, setClientPhone] = useState('');
-  const [clientPhoneId, setClientPhoneId] = useState(null);
+  const [clientPhones, setClientPhones] = useState([]);
+  const [draftPhone, setDraftPhone] = useState(null);
   const [phoneSaving, setPhoneSaving] = useState(false);
-
-  const [newClientForm, setNewClientForm] = useState({ first_name: '', last_name: '', phone: '' });
-  const [newClientSaving, setNewClientSaving] = useState(false);
   const [draftDeliveries, setDraftDeliveries] = useState([]);
   const [mutatingDeliveries, setMutatingDeliveries] = useState(false);
 
@@ -149,13 +63,15 @@ const OrderDetail = () => {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentSaving, setPaymentSaving] = useState(false);
 
-  const isTerminal = order?.status === 'completed' || order?.status === 'cancelled';
+  const isTerminal = isTerminalOrderStatus(order?.status, orderStatuses);
   const isNew = id === 'new';
+  const currentClientId = clientIdOf(order);
   const canDeleteOrder = isManager && !isNew && !isTerminal;
   const clientIdFromUrl = searchParams.get('client');
   const openProductsFromUrl = searchParams.get('add') === '1';
   const newDraftReady = useRef(false);
   const openedAddFromUrl = useRef(false);
+  const createdOrderIdRef = useRef(null);
 
   const isDirty = useMemo(() => {
     if (!order) return false;
@@ -188,28 +104,29 @@ const OrderDetail = () => {
     } else {
       setSelectedClientName('');
     }
-    setClientPhone(orderRes.data.client_phone || '');
-    setClientPhoneId(orderRes.data.client_phone_id || null);
   }, [id, isNew]);
 
   useEffect(() => {
     let cancelled = false;
     const loadCatalogs = async () => {
-      const [channelRes, deliveryRes, paymentRes, productsRes, usersRes] = await Promise.all([
-        api.get('/orders/sales_channels/').catch(() => ({ data: [] })),
-        api.get('/orders/delivery_services/').catch(() => ({ data: [] })),
-        api.get('/orders/payment_types/').catch(() => ({ data: [] })),
-        api.get('/catalog/product_cards/').catch(() => ({ data: [] })),
+      const catalogParams = { params: { page_size: CATALOG_PAGE_SIZE } };
+      const [channelRes, deliveryRes, paymentRes, productsRes, usersRes, statusRes] = await Promise.all([
+        api.get('/orders/sales_channels/', catalogParams).catch(() => ({ data: [] })),
+        api.get('/orders/delivery_services/', catalogParams).catch(() => ({ data: [] })),
+        api.get('/orders/payment_types/', catalogParams).catch(() => ({ data: [] })),
+        api.get('/catalog/product_cards/', catalogParams).catch(() => ({ data: [] })),
         isManager
-          ? api.get('/users/users/?page_size=100').catch(() => ({ data: [] }))
+          ? api.get('/users/users/', catalogParams).catch(() => ({ data: [] }))
           : Promise.resolve({ data: [] }),
+        api.get('/orders/order_statuses/', catalogParams).catch(() => ({ data: [] })),
       ]);
       if (cancelled) return;
-      setChannels(channelRes.data.results || channelRes.data || []);
-      setDeliveryServices(deliveryRes.data.results || deliveryRes.data || []);
-      setPaymentTypes(paymentRes.data.results || paymentRes.data || []);
-      setCatalogProducts(productsRes.data.results || productsRes.data || []);
-      setSellers((usersRes.data.results || usersRes.data || []).filter((u) => u.is_active !== false));
+      setChannels(unwrapList(channelRes.data));
+      setDeliveryServices(unwrapList(deliveryRes.data));
+      setPaymentTypes(unwrapList(paymentRes.data));
+      setCatalogProducts(unwrapList(productsRes.data));
+      setSellers(unwrapList(usersRes.data).filter((u) => u.is_active !== false));
+      setOrderStatuses(mapOrderStatuses(unwrapList(statusRes.data)));
     };
     loadCatalogs();
     return () => {
@@ -218,7 +135,10 @@ const OrderDetail = () => {
   }, [isManager]);
 
   useEffect(() => {
-    if (id !== 'new') newDraftReady.current = false;
+    if (id !== 'new') {
+      newDraftReady.current = false;
+      createdOrderIdRef.current = null;
+    }
     openedAddFromUrl.current = false;
   }, [id]);
 
@@ -238,7 +158,6 @@ const OrderDetail = () => {
             setSelectedClientName(
               `${clientRes.data.first_name || ''} ${clientRes.data.last_name || ''}`.trim()
             );
-            setClientPhone(clientRes.data.primary_phone || '');
             if (clientRes.data.discount_percent != null) {
               initial.discount_percent = clientRes.data.discount_percent;
             }
@@ -248,8 +167,6 @@ const OrderDetail = () => {
           }
         } else {
           setSelectedClientName('');
-          setClientPhone('');
-          setClientPhoneId(null);
         }
         if (cancelled) return;
         newDraftReady.current = true;
@@ -270,8 +187,6 @@ const OrderDetail = () => {
         } else {
           setSelectedClientName('');
         }
-        setClientPhone(orderRes.data.client_phone || '');
-        setClientPhoneId(orderRes.data.client_phone_id || null);
       } catch (err) {
         if (cancelled) return;
         setOrder(null);
@@ -283,6 +198,27 @@ const OrderDetail = () => {
       cancelled = true;
     };
   }, [id, isNew, clientIdFromUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentClientId) {
+      setClientPhones([]);
+      setDraftPhone(null);
+      return undefined;
+    }
+    api.get('/clients/client_phones/', { params: { client: currentClientId } })
+      .then((response) => {
+        if (cancelled) return;
+        setClientPhones(unwrapList(response.data));
+        setDraftPhone(null);
+      })
+      .catch(() => {
+        if (!cancelled) setClientPhones([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentClientId]);
 
   useEffect(() => {
     if (isNew || !order || !openProductsFromUrl || openedAddFromUrl.current) return undefined;
@@ -300,7 +236,8 @@ const OrderDetail = () => {
 
   const handleStatusChange = async (nextStatus) => {
     if (nextStatus === order.status) return;
-    if (nextStatus === 'cancelled') {
+    const nextKind = orderStatuses.find((s) => s.value === nextStatus)?.kind;
+    if (nextKind === 'cancelled' || nextStatus === 'cancelled') {
       if (!(await confirm('Отменить заказ?'))) return;
     }
 
@@ -338,16 +275,21 @@ const OrderDetail = () => {
     const payload = pickWritable(order, isManager);
     if (!payload.client) delete payload.client;
     if (!payload.delivery_service) delete payload.delivery_service;
-    const res = await api.post('/orders/orders/', payload);
-    const newId = res.data.id;
+    let newId = createdOrderIdRef.current;
+    if (!newId) {
+      const res = await api.post('/orders/orders/', payload);
+      newId = res.data.id;
+      createdOrderIdRef.current = newId;
+    }
     for (const row of draftDeliveries) {
-      if (!row.delivery_service) continue;
-      await api.post('/orders/order_deliveries/', {
+      if (!row.delivery_service || row.id) continue;
+      const created = await api.post('/orders/order_deliveries/', {
         order: newId,
         delivery_service: row.delivery_service,
         tracking_number: row.tracking_number || '',
         delivery_date: row.delivery_date || null,
       });
+      row.id = created.data.id;
     }
     return newId;
   };
@@ -362,14 +304,17 @@ const OrderDetail = () => {
         navigate(`/orders/${newId}`);
       } else {
         const payload = diffWritable(order, baseline, isManager);
-        if (Object.keys(payload).length === 0) {
+        const toSend = isTerminal
+          ? (payload.comment !== undefined ? { comment: payload.comment } : {})
+          : payload;
+        if (Object.keys(toSend).length === 0) {
           notify('Нет изменений для сохранения', 'warning');
           return;
         }
-        if (Object.keys(payload).length === 1 && payload.status !== undefined) {
-          await api.patch(`/orders/orders/${id}/`, { status: payload.status });
+        if (Object.keys(toSend).length === 1 && toSend.status !== undefined) {
+          await api.patch(`/orders/orders/${id}/`, { status: toSend.status });
         } else {
-          await api.patch(`/orders/orders/${id}/`, payload);
+          await api.patch(`/orders/orders/${id}/`, toSend);
         }
         notify('Заказ сохранен', 'success');
         await refreshOrder();
@@ -385,7 +330,7 @@ const OrderDetail = () => {
     if (!canDeleteOrder) return;
     if (
       !(await confirm(
-        'Удалить заказ? Товар вернётся на склад (если заказ не завершён/отменён).'
+        'Удалить заказ? Остаток на складе не изменится.'
       ))
     ) {
       return;
@@ -402,41 +347,9 @@ const OrderDetail = () => {
     }
   };
 
-  const searchClients = async (q) => {
-    setClientSearchLoading(true);
-    try {
-      const res = await api.get('/clients/clients/', { params: { search: q || undefined } });
-      setClientResults(res.data.results || res.data || []);
-    } catch (err) {
-      notify(`Не удалось найти клиентов:\n${extractApiError(err)}`, 'error');
-      setClientResults([]);
-    } finally {
-      setClientSearchLoading(false);
-    }
-  };
-
   const openClientPicker = () => {
+    if (isTerminal) return;
     setOpenClientModal(true);
-    setClientSearch('');
-    searchClients('');
-  };
-
-  const loadClientPhone = async (clientId, fallbackNumber = '') => {
-    if (!clientId) {
-      setClientPhone(fallbackNumber);
-      setClientPhoneId(null);
-      return;
-    }
-    try {
-      const res = await api.get('/clients/client_phones/', { params: { client: clientId } });
-      const phones = res.data.results || res.data || [];
-      const primary = phones.find((p) => p.is_primary) || phones[0];
-      setClientPhone(primary?.number || fallbackNumber);
-      setClientPhoneId(primary?.id || null);
-    } catch {
-      setClientPhone(fallbackNumber);
-      setClientPhoneId(null);
-    }
   };
 
   const selectClient = (client) => {
@@ -446,28 +359,30 @@ const OrderDetail = () => {
       handleChange('discount_percent', client.discount_percent);
     }
     setOpenClientModal(false);
-    setOpenNewClientModal(false);
-    loadClientPhone(client.id, client.primary_phone || '');
   };
 
-  const saveClientPhone = async () => {
-    if (!order?.client) return;
-    const number = clientPhone.trim();
+  const persistPhoneNumber = async (phoneId, number) => {
+    if (!order?.client || isTerminal) return;
+    const trimmed = number.trim();
+    if (!trimmed) {
+      notify('Введите номер телефона', 'warning');
+      return;
+    }
     setPhoneSaving(true);
     try {
-      if (!number) {
-        notify('Введите номер телефона', 'warning');
-        return;
-      }
-      if (clientPhoneId) {
-        await api.patch(`/clients/client_phones/${clientPhoneId}/`, { number });
+      if (phoneId) {
+        await api.patch(`/clients/client_phones/${phoneId}/`, { number: trimmed });
+        setClientPhones((prev) => prev.map((row) => (
+          row.id === phoneId ? { ...row, number: trimmed } : row
+        )));
       } else {
         const res = await api.post('/clients/client_phones/', {
-          client: order.client,
-          number,
-          is_primary: true,
+          client: currentClientId,
+          number: trimmed,
+          is_primary: clientPhones.length === 0,
         });
-        setClientPhoneId(res.data.id);
+        setClientPhones((prev) => [...prev, res.data]);
+        setDraftPhone(null);
       }
     } catch (err) {
       notify(`Не удалось сохранить телефон:\n${extractApiError(err)}`, 'error');
@@ -476,27 +391,15 @@ const OrderDetail = () => {
     }
   };
 
-  const submitNewClient = async () => {
-    const firstName = newClientForm.first_name.trim();
-    const phone = newClientForm.phone.trim();
-    if (!firstName || !phone) {
-      notify('Укажите имя и телефон клиента', 'warning');
+  const handleAddPhone = () => {
+    if (isTerminal) return;
+    if (!order?.client) {
+      notify('Сначала выберите клиента', 'warning');
+      openClientPicker();
       return;
     }
-    setNewClientSaving(true);
-    try {
-      const created = await api.post('/clients/clients/', {
-        first_name: firstName,
-        last_name: newClientForm.last_name.trim(),
-        phone,
-      });
-      selectClient(created.data);
-      notify('Клиент создан', 'success');
-    } catch (err) {
-      notify(`Не удалось создать клиента:\n${extractApiError(err)}`, 'error');
-    } finally {
-      setNewClientSaving(false);
-    }
+    if (clientPhones.length === 0 || draftPhone !== null) return;
+    setDraftPhone('');
   };
 
   const addDeliveryRow = () => {
@@ -616,8 +519,6 @@ const OrderDetail = () => {
         `${res.data.client_name} ${res.data.client_last_name || ''}`.trim()
       );
     }
-    setClientPhone(res.data.client_phone || clientPhone);
-    setClientPhoneId(res.data.client_phone_id || clientPhoneId);
     return clientIdOf(res.data);
   };
 
@@ -707,7 +608,6 @@ const OrderDetail = () => {
       if (client.discount_percent != null) {
         handleChange('discount_percent', client.discount_percent);
       }
-      await loadClientPhone(client.id, phone);
       setOpenGrillClientModal(false);
       const products = pendingGrillProducts;
       setPendingGrillProducts([]);
@@ -782,6 +682,36 @@ const OrderDetail = () => {
     } finally {
       setPaymentSaving(false);
     }
+  };
+
+  const handleOpenProductSearch = async () => {
+    if (!isNew) {
+      try {
+        await persistAssignedClient(order);
+      } catch (err) {
+        notify(`Не удалось сохранить клиента:\n${extractApiError(err)}`, 'error');
+        return;
+      }
+      setOpenProductDialog(true);
+      return;
+    }
+    setSaving(true);
+    try {
+      const newId = await persistNewOrder();
+      if (!newId) return;
+      notify('Новый заказ создан', 'success');
+      navigate(`/orders/${newId}?tab=1&add=1`, { replace: true });
+    } catch (err) {
+      notify(`Ошибка при сохранении:\n${extractApiError(err)}`, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const closeGrillClientModal = () => {
+    if (grillSaving) return;
+    setOpenGrillClientModal(false);
+    setPendingGrillProducts([]);
   };
 
   if (loadError) {
@@ -887,476 +817,59 @@ const OrderDetail = () => {
         </Box>
 
         {tab === 0 && (
-          <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <Box sx={{ border: '1px solid #EDF2F7', borderRadius: 3, p: 3 }}>
-              <Typography variant="h5" sx={{ mb: 3 }}>
-                {isNew ? 'Новый заказ' : `Заказ ${order.order_number}`}
-              </Typography>
-              <Grid container spacing={3} sx={{ mb: 3 }}>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    type="date"
-                    required
-                    label="Дата заказа"
-                    slotProps={{ inputLabel: { shrink: true } }}
-                    value={order.order_date || ''}
-                    onChange={(e) => handleChange('order_date', e.target.value)}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <SearchableSelect
-                    id="order-sales-channel"
-                    label="Канал привлечения"
-                    placeholder="Выберите канал"
-                    value={order.sales_channel || ''}
-                    onChange={(value) => handleChange('sales_channel', value)}
-                    options={channels.map((c) => ({ value: c.id, label: c.name }))}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  {isManager ? (
-                    <SearchableSelect
-                      id="order-seller"
-                      label="Продавец"
-                      placeholder="Выберите продавца"
-                      value={order.seller || ''}
-                      onChange={(value) => handleChange('seller', value)}
-                      options={sellers.map((u) => ({ value: u.id, label: formatUserName(u) }))}
-                    />
-                  ) : (
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Продавец"
-                      value={order.seller_name || ''}
-                      slotProps={{ inputLabel: { shrink: true } }}
-                      disabled
-                    />
-                  )}
-                </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <SearchableSelect
-                    id="order-status"
-                    label="Статус"
-                    required
-                    filterable={false}
-                    disabled={saving || isTerminal}
-                    value={order.status || 'reserved'}
-                    onChange={(value) => handleStatusChange(value)}
-                    options={ORDER_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
-                  />
-                </Grid>
-              </Grid>
-              <TextField
-                fullWidth
-                size="small"
-                label="Примечание"
-                value={order.comment || ''}
-                onChange={(e) => handleChange('comment', e.target.value)}
-              />
-            </Box>
-
-            <Box sx={{ border: '1px solid #EDF2F7', borderRadius: 3, p: 3 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  mb: 3,
-                }}
-              >
-                <Typography variant="h5">Доставка</Typography>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  sx={{ textTransform: 'uppercase' }}
-                  disabled={isTerminal || mutatingDeliveries}
-                  onClick={addDeliveryRow}
-                >
-                  ДОБАВИТЬ ДОСТАВКУ +
-                </Button>
-              </Box>
-              {deliveryRows.length === 0 ? (
-                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                  Доставка не указана
-                </Typography>
-              ) : (
-                deliveryRows.map((row) => (
-                  <Grid
-                    container
-                    spacing={2}
-                    wrap="nowrap"
-                    alignItems="center"
-                    key={row.id || row.tempId}
-                    sx={{ mb: 2 }}
-                  >
-                    <Grid size={4}>
-                      <SearchableSelect
-                        id={`order-delivery-service-${row.id || row.tempId}`}
-                        label="Способ доставки"
-                        disabled={isTerminal || mutatingDeliveries}
-                        value={row.delivery_service || ''}
-                        onChange={(value) => handleDeliveryServiceChange(row, value || null)}
-                        options={deliveryServices.map((ds) => ({ value: ds.id, label: ds.name }))}
-                        disableClearable
-                      />
-                    </Grid>
-                    <Grid size={3}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        label="Трек-номер"
-                        defaultValue={row.tracking_number || ''}
-                        key={`${row.id || row.tempId}-${row.tracking_number || ''}`}
-                        disabled={isTerminal || mutatingDeliveries}
-                        onBlur={(e) => handleDeliveryTrackingBlur(row, e.target.value)}
-                      />
-                    </Grid>
-                    <Grid size={3}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        type="date"
-                        label="Дата доставки"
-                        defaultValue={row.delivery_date || ''}
-                        key={`${row.id || row.tempId}-date-${row.delivery_date || ''}`}
-                        disabled={isTerminal || mutatingDeliveries}
-                        onBlur={(e) => handleDeliveryDateBlur(row, e.target.value)}
-                        slotProps={{ inputLabel: { shrink: true } }}
-                      />
-                    </Grid>
-                    <Grid size="auto" sx={{ flexShrink: 0 }}>
-                      <Button
-                        size="small"
-                        color="error"
-                        disabled={isTerminal || mutatingDeliveries}
-                        onClick={() => handleDeleteDelivery(row)}
-                      >
-                        Удалить
-                      </Button>
-                    </Grid>
-                  </Grid>
-                ))
-              )}
-            </Box>
-
-            <Box sx={{ border: '1px solid #EDF2F7', borderRadius: 3, p: 3 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  mb: 3,
-                }}
-              >
-                <Typography variant="h5">Клиент</Typography>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                  <Button
-                    variant="outlined"
-                    color="secondary"
-                    sx={{ textTransform: 'uppercase' }}
-                    onClick={() => {
-                      setNewClientForm({ first_name: '', last_name: '', phone: '' });
-                      setOpenNewClientModal(true);
-                    }}
-                  >
-                    НОВЫЙ КЛИЕНТ +
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="secondary"
-                    sx={{ textTransform: 'uppercase' }}
-                    onClick={openClientPicker}
-                  >
-                    ВЫБРАТЬ КЛИЕНТА +
-                  </Button>
-                </Box>
-              </Box>
-              <Grid container spacing={3}>
-                <Grid size={4}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="ФИО"
-                    disabled
-                    value={clientDisplayName}
-                  />
-                </Grid>
-                <Grid size={4}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Телефон"
-                    placeholder="+375..."
-                    disabled={!order.client || phoneSaving}
-                    value={clientPhone}
-                    onChange={(e) => setClientPhone(e.target.value)}
-                    onBlur={() => {
-                      if (order.client) saveClientPhone();
-                    }}
-                  />
-                </Grid>
-                <Grid size={4}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Скидка (%)"
-                    type="number"
-                    value={order.discount_percent || 0}
-                    onChange={(e) => handleChange('discount_percent', e.target.value)}
-                  />
-                </Grid>
-              </Grid>
-            </Box>
-          </Box>
+          <OrderDataTab
+            isNew={isNew}
+            isTerminal={isTerminal}
+            order={order}
+            channels={channels}
+            sellers={sellers}
+            isManager={isManager}
+            saving={saving}
+            orderStatuses={orderStatuses}
+            mutatingDeliveries={mutatingDeliveries}
+            deliveryRows={deliveryRows}
+            deliveryServices={deliveryServices}
+            clientDisplayName={clientDisplayName}
+            clientPhones={clientPhones}
+            phoneSaving={phoneSaving}
+            draftPhone={draftPhone}
+            onChange={handleChange}
+            onStatusChange={handleStatusChange}
+            onAddDelivery={addDeliveryRow}
+            onDeliveryServiceChange={handleDeliveryServiceChange}
+            onDeliveryTrackingBlur={handleDeliveryTrackingBlur}
+            onDeliveryDateBlur={handleDeliveryDateBlur}
+            onDeleteDelivery={handleDeleteDelivery}
+            onAddPhone={handleAddPhone}
+            onOpenClientPicker={openClientPicker}
+            onPersistPhone={persistPhoneNumber}
+            onDraftPhoneChange={setDraftPhone}
+          />
         )}
 
         {tab === 1 && (
-          <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <Box sx={{ border: '1px solid #EDF2F7', borderRadius: 3, p: 3, minHeight: 300 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  mb: 3,
-                }}
-              >
-                <Typography variant="h5">Товар</Typography>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  sx={{ textTransform: 'uppercase' }}
-                  disabled={isTerminal || mutatingItems || saving}
-                  onClick={async () => {
-                    if (!isNew) {
-                      try {
-                        await persistAssignedClient(order);
-                      } catch (err) {
-                        notify(`Не удалось сохранить клиента:\n${extractApiError(err)}`, 'error');
-                        return;
-                      }
-                      setOpenProductDialog(true);
-                      return;
-                    }
-                    setSaving(true);
-                    try {
-                      const newId = await persistNewOrder();
-                      if (!newId) return;
-                      notify('Новый заказ создан', 'success');
-                      navigate(`/orders/${newId}?tab=1&add=1`, { replace: true });
-                    } catch (err) {
-                      notify(`Ошибка при сохранении:\n${extractApiError(err)}`, 'error');
-                    } finally {
-                      setSaving(false);
-                    }
-                  }}
-                >
-                  ДОБАВИТЬ ТОВАР +
-                </Button>
-              </Box>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell padding="checkbox">
-                        <Checkbox size="small" disabled />
-                      </TableCell>
-                      <TableCell>ID товара / Артикул</TableCell>
-                      <TableCell>Кол-во</TableCell>
-                      <TableCell>Цена без НДС</TableCell>
-                      <TableCell>НДС %</TableCell>
-                      <TableCell align="right">Сумма с НДС</TableCell>
-                      <TableCell align="right">Действия</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {order.items && order.items.length > 0 ? (
-                      order.items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell padding="checkbox">
-                            <Checkbox size="small" disabled />
-                          </TableCell>
-                          <TableCell>
-                            <ProductPreviewTooltip product={item}>
-                              <Box>
-                                <Typography variant="body2">{item.product_name}</Typography>
-                                <Typography variant="caption" sx={{
-                                  color: "text.secondary"
-                                }}>
-                                  {item.product_sku}
-                                </Typography>
-                              </Box>
-                            </ProductPreviewTooltip>
-                          </TableCell>
-                          <TableCell sx={{ minWidth: 100 }}>
-                            {isTerminal ? (
-                              `${item.quantity} шт.`
-                            ) : (
-                              <TextField
-                                size="small"
-                                type="number"
-                                slotProps={{ htmlInput: { min: 1, style: { width: 64 } } }}
-                                defaultValue={item.quantity}
-                                key={`${item.id}-${item.quantity}`}
-                                disabled={mutatingItems}
-                                onBlur={(e) => handleQtyChange(item, e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.target.blur();
-                                  }
-                                }}
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell>{formatCurrency(item.price)}</TableCell>
-                          <TableCell>{item.vat_rate}%</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 600 }}>
-                            {formatCurrency(item.line_total)}
-                          </TableCell>
-                          <TableCell align="right">
-                            <Button
-                              size="small"
-                              color="error"
-                              disabled={isTerminal || mutatingItems}
-                              onClick={() => handleDeleteItem(item)}
-                            >
-                              Удалить
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={7} align="center" sx={{ py: 3, color: '#718096' }}>
-                          Нет добавленных товаров
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-
-            <Box sx={{ border: '1px solid #EDF2F7', borderRadius: 3, p: 3 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  mb: 3,
-                }}
-              >
-                <Typography variant="h5">Оплата</Typography>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  sx={{ textTransform: 'uppercase' }}
-                  disabled={isTerminal || isNew || paymentSaving}
-                  onClick={handleAddPayment}
-                >
-                  ДОБАВИТЬ ОПЛАТУ +
-                </Button>
-              </Box>
-
-              <Grid container spacing={3} sx={{ mb: 3 }}>
-                <Grid size={5}>
-                  <SearchableSelect
-                    id="order-payment-type"
-                    label="Способ оплаты"
-                    placeholder="Способ оплаты"
-                    disabled={isTerminal || isNew}
-                    value={paymentType}
-                    onChange={setPaymentType}
-                    options={paymentTypes.map((pt) => ({ value: pt.id, label: pt.name }))}
-                  />
-                </Grid>
-                <Grid size={5}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Сумма, BYN"
-                    type="number"
-                    value={paymentAmount}
-                    disabled={isTerminal || isNew}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    slotProps={{
-                      input: {
-                        endAdornment: (
-                          <InputAdornment position="end">BYN</InputAdornment>
-                        ),
-                      },
-                    }}
-                  />
-                </Grid>
-              </Grid>
-
-              {payments.length > 0 ? (
-                <TableContainer sx={{ mb: 3 }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Способ оплаты</TableCell>
-                        <TableCell align="right">Сумма</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {payments.map((p) => (
-                        <TableRow key={p.id}>
-                          <TableCell>{paymentTypeName(p.payment_type)}</TableCell>
-                          <TableCell align="right">{formatCurrency(p.amount)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              ) : (
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 3
-                  }}>
-                  Платежей пока нет
-                </Typography>
-              )}
-
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  borderTop: '1px solid #EDF2F7',
-                  pt: 3,
-                  mt: 2,
-                  flexWrap: 'wrap',
-                  gap: 2,
-                }}
-              >
-                <Typography variant="h4" sx={{ display: 'flex', gap: 2, alignItems: 'baseline' }}>
-                  Итого:{' '}
-                  <Box component="span" sx={{ color: '#CC5E33', fontWeight: 600 }}>
-                    {formatCurrency(orderTotal)}
-                  </Box>
-                </Typography>
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="body1">
-                    Оплачено:{' '}
-                    <Box component="span" sx={{ fontWeight: 600 }}>
-                      {formatCurrency(paidTotal)}
-                    </Box>
-                  </Typography>
-                  <Typography variant="body2" sx={{
-                    color: "text.secondary"
-                  }}>
-                    Остаток: {formatCurrency(remaining)}
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-          </Box>
+          <OrderItemsTab
+            isNew={isNew}
+            isTerminal={isTerminal}
+            mutatingItems={mutatingItems}
+            saving={saving}
+            order={order}
+            paymentSaving={paymentSaving}
+            paymentType={paymentType}
+            paymentTypes={paymentTypes}
+            paymentAmount={paymentAmount}
+            payments={payments}
+            paymentTypeName={paymentTypeName}
+            orderTotal={orderTotal}
+            paidTotal={paidTotal}
+            remaining={remaining}
+            onAddProduct={handleOpenProductSearch}
+            onQtyChange={handleQtyChange}
+            onDeleteItem={handleDeleteItem}
+            onAddPayment={handleAddPayment}
+            onPaymentTypeChange={setPaymentType}
+            onPaymentAmountChange={setPaymentAmount}
+          />
         )}
       </Paper>
 
@@ -1369,187 +882,20 @@ const OrderDetail = () => {
           .filter((v, i, a) => a.findIndex((t) => t && t.id === v?.id) === i && v)}
       />
 
-      <Dialog
+      <ClientPickerDialog
         open={openClientModal}
         onClose={() => setOpenClientModal(false)}
-        maxWidth="sm"
-        fullWidth
-        slotProps={{ paper: { sx: { borderRadius: 3 } } }}
-      >
-        <DialogTitle>Выбрать клиента</DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Поиск по имени, email, телефону"
-            value={clientSearch}
-            sx={{ mt: 1, mb: 2 }}
-            onChange={(e) => setClientSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') searchClients(clientSearch);
-            }}
-            slotProps={{
-              input: {
-                endAdornment: (
-                  <Button size="small" onClick={() => searchClients(clientSearch)}>
-                    Найти
-                  </Button>
-                ),
-              },
-            }}
-          />
-          {clientSearchLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-              <CircularProgress size={28} />
-            </Box>
-          ) : (
-            <List dense sx={{ maxHeight: 360, overflow: 'auto' }}>
-              {clientResults.length === 0 ? (
-                <Typography
-                  sx={{
-                    color: "text.secondary",
-                    px: 2,
-                    py: 2
-                  }}>
-                  Клиенты не найдены
-                </Typography>
-              ) : (
-                clientResults.map((c) => (
-                  <ListItemButton key={c.id} onClick={() => selectClient(c)}>
-                    <ListItemText
-                      primary={`${c.first_name || ''} ${c.last_name || ''}`.trim() || `Клиент #${c.id}`}
-                      secondary={c.primary_phone || c.email || undefined}
-                    />
-                  </ListItemButton>
-                ))
-              )}
-            </List>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenClientModal(false)}>Отмена</Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              setOpenClientModal(false);
-              setNewClientForm({
-                first_name: '',
-                last_name: '',
-                phone: clientSearch.trim().startsWith('+') || /^\d/.test(clientSearch.trim())
-                  ? clientSearch.trim()
-                  : '',
-              });
-              setOpenNewClientModal(true);
-            }}
-          >
-            Новый клиент
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onSelect={selectClient}
+      />
 
-      <Dialog
-        open={openNewClientModal}
-        onClose={() => {
-          if (newClientSaving) return;
-          setOpenNewClientModal(false);
-        }}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{ paper: { sx: { borderRadius: 3 } } }}
-      >
-        <DialogTitle>Новый клиент</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <TextField
-            fullWidth
-            size="small"
-            required
-            label="Имя"
-            value={newClientForm.first_name}
-            onChange={(e) => setNewClientForm((prev) => ({ ...prev, first_name: e.target.value }))}
-          />
-          <TextField
-            fullWidth
-            size="small"
-            label="Фамилия"
-            value={newClientForm.last_name}
-            onChange={(e) => setNewClientForm((prev) => ({ ...prev, last_name: e.target.value }))}
-          />
-          <TextField
-            fullWidth
-            size="small"
-            required
-            label="Телефон"
-            value={newClientForm.phone}
-            onChange={(e) => setNewClientForm((prev) => ({ ...prev, phone: e.target.value }))}
-            placeholder="+375..."
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenNewClientModal(false)} disabled={newClientSaving}>
-            Отмена
-          </Button>
-          <Button variant="contained" disabled={newClientSaving} onClick={submitNewClient}>
-            {newClientSaving ? <CircularProgress size={20} color="inherit" /> : 'Создать'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
+      <GrillClientDialog
         open={openGrillClientModal}
-        onClose={() => {
-          if (grillSaving) return;
-          setOpenGrillClientModal(false);
-          setPendingGrillProducts([]);
-        }}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{ paper: { sx: { borderRadius: 3 } } }}
-      >
-        <DialogTitle>Клиент для продажи гриля</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            При продаже гриля укажите имя и телефон клиента.
-          </Typography>
-          <TextField
-            fullWidth
-            size="small"
-            required
-            label="Имя"
-            value={grillForm.first_name}
-            onChange={(e) => setGrillForm((prev) => ({ ...prev, first_name: e.target.value }))}
-          />
-          <TextField
-            fullWidth
-            size="small"
-            label="Фамилия"
-            value={grillForm.last_name}
-            onChange={(e) => setGrillForm((prev) => ({ ...prev, last_name: e.target.value }))}
-          />
-          <TextField
-            fullWidth
-            size="small"
-            required
-            label="Телефон"
-            value={grillForm.phone}
-            onChange={(e) => setGrillForm((prev) => ({ ...prev, phone: e.target.value }))}
-            placeholder="+375..."
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setOpenGrillClientModal(false);
-              setPendingGrillProducts([]);
-            }}
-            disabled={grillSaving}
-          >
-            Отмена
-          </Button>
-          <Button variant="contained" disabled={grillSaving} onClick={submitGrillClient}>
-            {grillSaving ? <CircularProgress size={20} color="inherit" /> : 'Сохранить и добавить'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        form={grillForm}
+        saving={grillSaving}
+        onChange={setGrillForm}
+        onClose={closeGrillClientModal}
+        onSubmit={submitGrillClient}
+      />
     </Box>
   );
 };

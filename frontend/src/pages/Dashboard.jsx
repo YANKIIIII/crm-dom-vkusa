@@ -310,6 +310,25 @@ const Dashboard = () => {
     [data],
   );
 
+  const statusChart = useMemo(
+    () => (data?.orders_by_status || [])
+      .map((row) => ({
+        id: row.status_code || row.name,
+        label: row.name || row.status_code,
+        value: toNumber(row.count),
+      }))
+      .filter((row) => row.value > 0),
+    [data],
+  );
+
+  const popularItems = useMemo(
+    () => (data?.popular_items || []).map((row) => ({
+      name: row.name || 'Без названия',
+      total_sold: toNumber(row.total_sold),
+    })),
+    [data],
+  );
+
   const revenueSpark = useMemo(
     () => (data?.daily_revenue || []).map((row) => toNumber(row.revenue)),
     [data],
@@ -443,6 +462,71 @@ const Dashboard = () => {
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
               <StatCard title="Средний чек" value={formatCurrency(data.average_check || 0)} />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Card sx={cardSx}>
+                <CardContent sx={{ p: 3, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                  <SectionTitle>Заказы по статусам</SectionTitle>
+                  {statusChart.length > 0 ? (
+                    <Box sx={{ width: '100%' }}>
+                      <PieChart
+                        colors={mangoFusionPalette}
+                        localeText={CHART_LOCALE}
+                        series={[{
+                          data: statusChart,
+                          innerRadius: 50,
+                          outerRadius: 100,
+                          paddingAngle: 2,
+                          cornerRadius: 4,
+                          highlightScope: { fade: 'global', highlight: 'item' },
+                          valueFormatter: (item) => `${item.value} шт.`,
+                        }]}
+                        height={280}
+                        margin={{ top: 8, bottom: 8 }}
+                        hideLegend={false}
+                      />
+                    </Box>
+                  ) : (
+                    <EmptyHint>Нет заказов для разбивки по статусам</EmptyHint>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Card sx={cardSx}>
+                <CardContent sx={{ p: 3, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                  <SectionTitle>Топ товаров</SectionTitle>
+                  {popularItems.length > 0 ? (
+                    <Box sx={{ width: '100%' }}>
+                      <BarChart
+                        dataset={popularItems}
+                        colors={mangoFusionPalette}
+                        localeText={CHART_LOCALE}
+                        layout="horizontal"
+                        yAxis={[{
+                          scaleType: 'band',
+                          dataKey: 'name',
+                          width: 'auto',
+                        }]}
+                        series={[{
+                          dataKey: 'total_sold',
+                          label: 'Продано, шт.',
+                          valueFormatter: (value) => `${formatQty(value)} шт.`,
+                        }]}
+                        height={Math.max(200, popularItems.length * 44)}
+                        margin={{ left: 4, right: 16, top: 8, bottom: 8 }}
+                        grid={{ vertical: true }}
+                        borderRadius={6}
+                        hideLegend
+                      />
+                    </Box>
+                  ) : (
+                    <EmptyHint>Нет продаж товаров за период</EmptyHint>
+                  )}
+                </CardContent>
+              </Card>
             </Grid>
 
             <Grid size={{ xs: 12, md: 7 }}>

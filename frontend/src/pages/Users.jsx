@@ -1,14 +1,14 @@
-import { Box, Typography, Paper, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, TextField, CircularProgress, Alert, IconButton, Tooltip } from '@mui/material';
+import { Box, Typography, Paper, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions, TextField, CircularProgress, Alert, IconButton, Tooltip, Switch, FormControlLabel, Checkbox, FormGroup, FormLabel } from '@mui/material';
 import { useEffect, useState } from 'react';
 import api from '../api';
 import { useFeedback } from '../hooks/useFeedback';
-import { extractApiError, PAGE_SIZE, PAGE_SIZE_OPTIONS, toggleOrdering, buildListQuery } from '../utils';
+import { extractApiError, PAGE_SIZE, PAGE_SIZE_OPTIONS, toggleOrdering, buildListQuery, GRANTABLE_MODULES, SELLER_DEFAULT_MODULES } from '../utils';
 import SortableHeader from '../components/SortableHeader';
 import SearchableSelect from '../components/SearchableSelect';
 import TruncatedText from '../components/TruncatedText';
 
 const ROLE_LABELS = {
-  seller: 'Продавец',
+  seller: 'Сотрудник',
   manager: 'Руководитель',
 };
 
@@ -19,6 +19,9 @@ const EMPTY_FORM = {
   username: '',
   password: '',
   role: 'seller',
+  job_title: '',
+  modules: [...SELLER_DEFAULT_MODULES],
+  is_active: true,
 };
 
 const formatDateTime = (value) => {
@@ -34,6 +37,7 @@ const fullName = (row) => (
 
 const Users = () => {
   const { notify, confirm } = useFeedback();
+  const currentUsername = localStorage.getItem('user_username');
   const [users, setUsers] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
@@ -46,9 +50,12 @@ const Users = () => {
   const [formError, setFormError] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [listVersion, setListVersion] = useState(0);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
+    setListLoading(true);
     api.get(`/users/users/?${buildListQuery({
       page: page + 1,
       pageSize,
@@ -58,12 +65,17 @@ const Users = () => {
         if (!cancelled) {
           setUsers(response.data.results || response.data);
           setTotalCount(response.data.count || 0);
+          setListError(null);
         }
       })
       .catch((error) => {
         if (!cancelled) {
+          setListError(extractApiError(error));
           notify(`Не удалось загрузить пользователей:\n${extractApiError(error)}`, 'error');
         }
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
       });
     return () => {
       cancelled = true;
@@ -91,6 +103,11 @@ const Users = () => {
       username: row.username || '',
       password: '',
       role: row.role || 'seller',
+      job_title: row.job_title || '',
+      modules: row.role === 'manager'
+        ? [...SELLER_DEFAULT_MODULES]
+        : (row.modules?.length ? row.modules : [...SELLER_DEFAULT_MODULES]),
+      is_active: row.is_active !== false,
     });
     setFormError(null);
     setOpenModal(true);
@@ -105,7 +122,17 @@ const Users = () => {
       email: formData.email,
       username: formData.username,
       role: formData.role,
+      job_title: formData.job_title,
+      is_active: (editingId && formData.username === currentUsername) ? true : formData.is_active,
     };
+    if (formData.role === 'seller') {
+      if (!formData.modules.length) {
+        setFormError('Выберите хотя бы один раздел');
+        setLoading(false);
+        return;
+      }
+      payload.modules = formData.modules;
+    }
     if (formData.password) payload.password = formData.password;
     try {
       if (editingId) {
@@ -140,6 +167,19 @@ const Users = () => {
     }
   };
 
+  const handleToggleActive = async (row) => {
+    if (row.username === currentUsername) {
+      notify('Нельзя отключить собственную учётную запись.', 'warning');
+      return;
+    }
+    try {
+      await api.patch(`/users/users/${row.id}/`, { is_active: !row.is_active });
+      setListVersion((v) => v + 1);
+    } catch (error) {
+      notify(`Не удалось изменить статус:\n${extractApiError(error)}`, 'error');
+    }
+  };
+
   return (
     <Box sx={{ maxWidth: 1400, margin: '0 auto' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
@@ -158,19 +198,46 @@ const Users = () => {
                 <SortableHeader field="last_name" label="ФИО" ordering={ordering} onSort={(field, desc) => { setOrdering(toggleOrdering(ordering, field, desc)); setPage(0); }} />
                 <SortableHeader field="username" label="Логин" ordering={ordering} onSort={(field, desc) => { setOrdering(toggleOrdering(ordering, field, desc)); setPage(0); }} />
                 <SortableHeader field="role" label="Роль" ordering={ordering} onSort={(field, desc) => { setOrdering(toggleOrdering(ordering, field, desc)); setPage(0); }} />
+                <TableCell>Должность</TableCell>
                 <SortableHeader field="is_active" label="Активен" ordering={ordering} onSort={(field, desc) => { setOrdering(toggleOrdering(ordering, field, desc)); setPage(0); }} />
                 <SortableHeader field="last_login" label="Последний вход" ordering={ordering} onSort={(field, desc) => { setOrdering(toggleOrdering(ordering, field, desc)); setPage(0); }} defaultDesc />
                 <TableCell align="right">Действия</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {users.map((row) => (
+              {listLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#718096' }}>Загрузка…</TableCell>
+                </TableRow>
+              ) : listError ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#E53E3E' }}>
+                    Не удалось загрузить пользователей
+                  </TableCell>
+                </TableRow>
+              ) : users.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#718096' }}>Нет пользователей</TableCell>
+                </TableRow>
+              ) : users.map((row) => (
                 <TableRow key={row.id} hover sx={{ cursor: 'pointer' }} onClick={() => openEdit(row)}>
                   <TableCell sx={{ color: '#4A5568' }}>{row.id}</TableCell>
                   <TableCell sx={{ color: '#1A202C', maxWidth: 220 }}><TruncatedText>{fullName(row)}</TruncatedText></TableCell>
                   <TableCell sx={{ color: '#4A5568' }}>{row.username}</TableCell>
                   <TableCell sx={{ color: '#4A5568' }}>{ROLE_LABELS[row.role] || row.role}</TableCell>
-                  <TableCell sx={{ color: '#4A5568' }}>{row.is_active ? 'Да' : 'Нет'}</TableCell>
+                  <TableCell sx={{ color: '#4A5568', maxWidth: 180 }}><TruncatedText>{row.job_title || '—'}</TruncatedText></TableCell>
+                  <TableCell sx={{ color: '#4A5568' }} onClick={(e) => e.stopPropagation()}>
+                    <Switch
+                      checked={Boolean(row.is_active)}
+                      onChange={() => handleToggleActive(row)}
+                      disabled={row.username === currentUsername}
+                      inputProps={{
+                        'aria-label': row.is_active
+                          ? `Деактивировать ${row.username}`
+                          : `Активировать ${row.username}`,
+                      }}
+                    />
+                  </TableCell>
                   <TableCell sx={{ color: '#4A5568' }}>{formatDateTime(row.last_login)}</TableCell>
                   <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                     <Tooltip title="Удалить пользователя">
@@ -191,11 +258,6 @@ const Users = () => {
                   </TableCell>
                 </TableRow>
               ))}
-              {users.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: '#718096' }}>Нет пользователей</TableCell>
-                </TableRow>
-              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -237,11 +299,64 @@ const Users = () => {
             label="Роль"
             required
             value={formData.role}
-            onChange={(value) => setFormData((prev) => ({ ...prev, role: value }))}
+            onChange={(value) => setFormData((prev) => ({
+              ...prev,
+              role: value,
+              modules: value === 'seller'
+                ? (prev.modules?.length ? prev.modules.filter((key) => GRANTABLE_MODULES.some((item) => item.key === key)) : [...SELLER_DEFAULT_MODULES])
+                : prev.modules,
+            }))}
             options={[
-              { value: 'seller', label: 'Продавец' },
+              { value: 'seller', label: 'Сотрудник' },
               { value: 'manager', label: 'Руководитель' },
             ]}
+          />
+          <TextField
+            fullWidth
+            label="Должность"
+            name="job_title"
+            placeholder="Например: Маркетолог"
+            value={formData.job_title}
+            onChange={handleInputChange}
+          />
+          {formData.role === 'manager' ? (
+            <Alert severity="info">Руководителю доступны все разделы, удаление заказов и клиентов.</Alert>
+          ) : (
+            <Box>
+              <FormLabel component="legend" sx={{ mb: 1 }}>Доступ к разделам</FormLabel>
+              <FormGroup>
+                {GRANTABLE_MODULES.map((item) => (
+                  <FormControlLabel
+                    key={item.key}
+                    control={(
+                      <Checkbox
+                        checked={formData.modules.includes(item.key)}
+                        onChange={() => setFormData((prev) => ({
+                          ...prev,
+                          modules: prev.modules.includes(item.key)
+                            ? prev.modules.filter((key) => key !== item.key)
+                            : [...prev.modules, item.key],
+                        }))}
+                      />
+                    )}
+                    label={item.label}
+                  />
+                ))}
+              </FormGroup>
+              <Typography variant="caption" sx={{ color: '#718096' }}>
+                Сотрудник не может удалять заказы и клиентов. Пользователей и журнал может вести только руководитель.
+              </Typography>
+            </Box>
+          )}
+          <FormControlLabel
+            control={
+              <Switch
+                checked={Boolean(formData.is_active)}
+                disabled={Boolean(editingId) && formData.username === currentUsername}
+                onChange={(e) => setFormData((prev) => ({ ...prev, is_active: e.target.checked }))}
+              />
+            }
+            label="Активен"
           />
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>

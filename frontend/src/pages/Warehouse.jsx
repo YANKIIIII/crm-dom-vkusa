@@ -8,6 +8,7 @@ import SearchableSelect from '../components/SearchableSelect';
 import TruncatedText from '../components/TruncatedText';
 import ProductPreviewTooltip from '../components/ProductPreviewTooltip';
 import ProductCardDialog from '../components/ProductCardDialog';
+import CompareFilter from '../components/CompareFilter';
 
 const EMPTY_PRODUCT_FORM = {
   name: '',
@@ -98,6 +99,14 @@ const getTagChipSx = (tag) => {
   return { bgcolor: '#EDF2F7', color: '#4A5568' };
 };
 
+const toRangeQuery = (op, from, to) => {
+  if (!op) return { min: '', max: '' };
+  if (op === 'gte') return { min: from, max: '' };
+  if (op === 'lte') return { min: '', max: from };
+  if (op === 'between') return { min: from, max: to };
+  return { min: '', max: '' };
+};
+
 const Warehouse = () => {
   const { notify, confirm } = useFeedback();
   const canWrite = Boolean(localStorage.getItem('user_role'));
@@ -109,10 +118,12 @@ const Warehouse = () => {
   const [ordering, setOrdering] = useState('id');
   const [category, setCategory] = useState('');
   const [stockTag, setStockTag] = useState('');
-  const [expiryAfter, setExpiryAfter] = useState('');
-  const [expiryBefore, setExpiryBefore] = useState('');
-  const [stockMin, setStockMin] = useState('');
-  const [stockMax, setStockMax] = useState('');
+  const [expiryOp, setExpiryOp] = useState('');
+  const [expiryFrom, setExpiryFrom] = useState('');
+  const [expiryTo, setExpiryTo] = useState('');
+  const [stockOp, setStockOp] = useState('');
+  const [stockFrom, setStockFrom] = useState('');
+  const [stockTo, setStockTo] = useState('');
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -124,11 +135,16 @@ const Warehouse = () => {
   const [qtyDrafts, setQtyDrafts] = useState({});
   const [savingQtyIds, setSavingQtyIds] = useState(() => new Set());
   const [listVersion, setListVersion] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     const fetchStock = async () => {
+      setLoading(true);
       try {
+        const expiryRange = toRangeQuery(expiryOp, expiryFrom, expiryTo);
+        const stockRange = toRangeQuery(stockOp, stockFrom, stockTo);
         const response = await api.get(
           `/warehouse/stock_items/?${buildListQuery({
             page: page + 1,
@@ -138,27 +154,31 @@ const Warehouse = () => {
             extra: {
               category,
               stock_tag: stockTag,
-              expiry_after: expiryAfter,
-              expiry_before: expiryBefore,
-              stock_min: stockMin,
-              stock_max: stockMax,
+              expiry_after: expiryRange.min,
+              expiry_before: expiryRange.max,
+              stock_min: stockRange.min,
+              stock_max: stockRange.max,
             },
           })}`
         );
         if (cancelled) return;
         setStockItems(response.data.results || response.data);
         setTotalCount(response.data.count || 0);
+        setLoadError(null);
       } catch (err) {
         if (!cancelled) {
+          setLoadError(extractApiError(err));
           notify(`Не удалось загрузить склад:\n${extractApiError(err)}`, 'error');
         }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     fetchStock();
     return () => {
       cancelled = true;
     };
-  }, [page, pageSize, search, ordering, category, stockTag, expiryAfter, expiryBefore, stockMin, stockMax, listVersion, notify]);
+  }, [page, pageSize, search, ordering, category, stockTag, expiryOp, expiryFrom, expiryTo, stockOp, stockFrom, stockTo, listVersion, notify]);
 
   const reloadSuppliers = async () => {
     try {
@@ -294,14 +314,6 @@ const Warehouse = () => {
     }
   };
 
-  const dateFilterSx = {
-    width: 150,
-    minWidth: 150,
-    flexShrink: 0,
-    '& input': { color: '#1A202C' },
-    '& input::-webkit-calendar-picker-indicator': { cursor: 'pointer', opacity: 1 },
-  };
-
   return (
     <Box sx={{ maxWidth: 1400, margin: '0 auto' }}>
       <Typography variant="h4" sx={{ mb: 4 }}>Склад (Остатки)</Typography>
@@ -309,19 +321,19 @@ const Warehouse = () => {
       <Paper sx={{ p: 0, overflow: 'hidden' }}>
         <Box
           sx={{
-            p: 3,
+            px: 2,
+            py: 1.5,
             display: 'flex',
-            gap: 1.5,
+            gap: 1,
             alignItems: 'center',
-            flexWrap: 'nowrap',
+            flexWrap: 'wrap',
             borderBottom: '1px solid #EDF2F7',
-            overflowX: 'auto',
           }}
         >
           <TextField
             placeholder="Поиск…"
             size="small"
-            sx={{ minWidth: 160, flex: '1 1 160px' }}
+            sx={{ width: 148, flex: '0 0 148px' }}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => {
@@ -329,7 +341,7 @@ const Warehouse = () => {
             }}
             slotProps={{ input: { 'aria-label': 'Поиск товаров' } }}
           />
-          <Box sx={{ minWidth: 140, flex: '0 1 160px' }}>
+          <Box sx={{ width: 124, flex: '0 0 124px' }}>
             <SearchableSelect
               id="warehouse-category"
               label="Категория"
@@ -341,7 +353,7 @@ const Warehouse = () => {
               ]}
             />
           </Box>
-          <Box sx={{ minWidth: 160, flex: '0 1 180px' }}>
+          <Box sx={{ width: 128, flex: '0 1 168px', minWidth: 128 }}>
             <SearchableSelect
               id="warehouse-tag"
               label="Тег"
@@ -354,54 +366,60 @@ const Warehouse = () => {
               ]}
             />
           </Box>
-          <TextField
-            size="small"
+          <CompareFilter
+            id="warehouse-expiry"
+            label="Срок годности"
+            op={expiryOp}
+            onOpChange={(next) => {
+              setExpiryOp(next);
+              if (!next) {
+                setExpiryFrom('');
+                setExpiryTo('');
+              } else if (next !== 'between') {
+                setExpiryTo('');
+              }
+              setPage(0);
+            }}
+            value={expiryFrom}
+            onValueChange={(next) => { setExpiryFrom(next); setPage(0); }}
+            valueTo={expiryTo}
+            onValueToChange={(next) => { setExpiryTo(next); setPage(0); }}
             type="date"
-            label="Срок с"
-            value={expiryAfter}
-            onChange={(e) => { setExpiryAfter(e.target.value); setPage(0); }}
-            sx={dateFilterSx}
-            slotProps={{ inputLabel: { shrink: true } }}
           />
-          <TextField
-            size="small"
-            type="date"
-            label="Срок по"
-            value={expiryBefore}
-            onChange={(e) => { setExpiryBefore(e.target.value); setPage(0); }}
-            sx={dateFilterSx}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          <TextField
-            size="small"
+          <CompareFilter
+            id="warehouse-stock"
+            label="Остаток"
+            op={stockOp}
+            onOpChange={(next) => {
+              setStockOp(next);
+              if (!next) {
+                setStockFrom('');
+                setStockTo('');
+              } else if (next !== 'between') {
+                setStockTo('');
+              }
+              setPage(0);
+            }}
+            value={stockFrom}
+            onValueChange={(next) => { setStockFrom(next); setPage(0); }}
+            valueTo={stockTo}
+            onValueToChange={(next) => { setStockTo(next); setPage(0); }}
             type="number"
-            label="Остаток от"
-            value={stockMin}
-            onChange={(e) => { setStockMin(e.target.value); setPage(0); }}
-            sx={{ width: 110, minWidth: 110, flexShrink: 0 }}
-            slotProps={{ htmlInput: { min: 0 } }}
           />
-          <TextField
-            size="small"
-            type="number"
-            label="Остаток до"
-            value={stockMax}
-            onChange={(e) => { setStockMax(e.target.value); setPage(0); }}
-            sx={{ width: 110, minWidth: 110, flexShrink: 0 }}
-            slotProps={{ htmlInput: { min: 0 } }}
-          />
-          <Button
-            variant="outlined"
-            sx={{ color: '#1A202C', borderColor: '#E2E8F0', px: 3, flexShrink: 0, ml: 'auto' }}
-            onClick={handleSearch}
-          >
-            ПОИСК
-          </Button>
-          {canWrite && (
-            <Button variant="contained" color="primary" sx={{ flexShrink: 0 }} onClick={openCreateProduct}>
-              НОВЫЙ ТОВАР +
+          <Box sx={{ display: 'flex', gap: 1, ml: 'auto', flexShrink: 0 }}>
+            <Button
+              variant="outlined"
+              sx={{ color: '#1A202C', borderColor: '#E2E8F0', px: 2 }}
+              onClick={handleSearch}
+            >
+              ПОИСК
             </Button>
-          )}
+            {canWrite && (
+              <Button variant="contained" color="primary" onClick={openCreateProduct}>
+                НОВЫЙ ТОВАР +
+              </Button>
+            )}
+          </Box>
         </Box>
 
         <TableContainer>
@@ -420,7 +438,23 @@ const Warehouse = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {stockItems.map((item) => (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={canWrite ? 9 : 8} align="center" sx={{ py: 4, color: '#718096' }}>
+                    Загрузка…
+                  </TableCell>
+                </TableRow>
+              ) : loadError ? (
+                <TableRow>
+                  <TableCell colSpan={canWrite ? 9 : 8} align="center" sx={{ py: 4, color: '#E53E3E' }}>
+                    Не удалось загрузить склад
+                  </TableCell>
+                </TableRow>
+              ) : stockItems.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={canWrite ? 9 : 8} align="center" sx={{ py: 4, color: '#718096' }}>Нет товаров на складе</TableCell>
+                </TableRow>
+              ) : stockItems.map((item) => (
                 <TableRow
                   key={item.id}
                   hover
@@ -510,11 +544,6 @@ const Warehouse = () => {
                   )}
                 </TableRow>
               ))}
-              {stockItems.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={canWrite ? 9 : 8} align="center" sx={{ py: 4, color: '#718096' }}>Нет товаров на складе</TableCell>
-                </TableRow>
-              )}
             </TableBody>
           </Table>
         </TableContainer>

@@ -10,6 +10,7 @@ import ClientDetail from './pages/ClientDetail';
 import Warehouse from './pages/Warehouse';
 import Users from './pages/Users';
 import AuditLog from './pages/AuditLog';
+import References from './pages/References';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 
@@ -37,21 +38,22 @@ function App() {
           <Route
             index
             element={
-              <RoleRoute roles={['manager']}>
+              <RoleRoute module="analytics" redirectTo="home">
                 <Suspense fallback={null}>
                   <Dashboard />
                 </Suspense>
               </RoleRoute>
             }
           />
-          <Route path="orders" element={<Orders />} />
-          <Route path="orders/:id" element={<OrderDetail />} />
-          <Route path="clients" element={<Clients />} />
-          <Route path="clients/:id" element={<ClientDetail />} />
-          <Route path="warehouse" element={<Warehouse />} />
+          <Route path="orders" element={<RoleRoute module="orders"><Orders /></RoleRoute>} />
+          <Route path="orders/:id" element={<RoleRoute module="orders"><OrderDetail /></RoleRoute>} />
+          <Route path="clients" element={<RoleRoute module="clients"><Clients /></RoleRoute>} />
+          <Route path="clients/:id" element={<RoleRoute module="clients"><ClientDetail /></RoleRoute>} />
+          <Route path="warehouse" element={<RoleRoute module="warehouse"><Warehouse /></RoleRoute>} />
           <Route path="catalog" element={<Navigate to="/warehouse" replace />} />
-          <Route path="users" element={<RoleRoute roles={['manager']}><Users /></RoleRoute>} />
-          <Route path="audit" element={<RoleRoute roles={['manager']}><AuditLog /></RoleRoute>} />
+          <Route path="references" element={<RoleRoute module="references"><References /></RoleRoute>} />
+          <Route path="users" element={<RoleRoute module="users"><Users /></RoleRoute>} />
+          <Route path="audit" element={<RoleRoute module="audit"><AuditLog /></RoleRoute>} />
         </Route>
       </Routes>
     </Router>

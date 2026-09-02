@@ -10,13 +10,17 @@ import api from '../api';
 import { useFeedback } from '../hooks/useFeedback';
 import {
   PAGE_SIZE, PAGE_SIZE_OPTIONS, formatCurrency, formatDate, extractApiError,
-  toggleOrdering, buildListQuery,
+  toggleOrdering, buildListQuery, CATALOG_PAGE_SIZE, mapOrderStatuses, unwrapList,
 } from '../utils';
 import SortableHeader from '../components/SortableHeader';
 import SearchableSelect from '../components/SearchableSelect';
 import TruncatedText from '../components/TruncatedText';
 
-const isDeletableStatus = (status) => status !== 'completed';
+const isDeletableStatus = (status, statuses) => {
+  const row = statuses.find((item) => item.value === status || item.code === status);
+  if (row?.kind) return row.kind !== 'completed';
+  return status !== 'completed';
+};
 
 const Orders = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -39,12 +43,28 @@ const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [deleting, setDeleting] = useState(false);
+  const [orderStatuses, setOrderStatuses] = useState(() => mapOrderStatuses([]));
 
   useEffect(() => {
     setSearchInput(urlSearch);
   }, [urlSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/orders/order_statuses/', { params: { page_size: CATALOG_PAGE_SIZE } })
+      .then((response) => {
+        if (!cancelled) setOrderStatuses(mapOrderStatuses(unwrapList(response.data)));
+      })
+      .catch(() => {
+        if (!cancelled) setOrderStatuses(mapOrderStatuses([]));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,8 +84,10 @@ const Orders = () => {
         setOrders(response.data.results || response.data);
         setTotalCount(response.data.count || 0);
         setSelectedIds(new Set());
+        setLoadError(null);
       } catch (error) {
         if (!cancelled) {
+          setLoadError(extractApiError(error));
           notify(`Не удалось загрузить заказы:\n${extractApiError(error)}`, 'error');
         }
       } finally {
@@ -137,8 +159,8 @@ const Orders = () => {
 
   const deleteOrdersByIds = async (ids) => {
     const targets = orders.filter((o) => ids.includes(o.id));
-    const blocked = targets.filter((o) => !isDeletableStatus(o.status));
-    const allowed = targets.filter((o) => isDeletableStatus(o.status));
+    const blocked = targets.filter((o) => !isDeletableStatus(o.status, orderStatuses));
+    const allowed = targets.filter((o) => isDeletableStatus(o.status, orderStatuses));
 
     if (blocked.length && !allowed.length) {
       notify('Нельзя удалить завершённые заказы.', 'warning');
@@ -189,7 +211,7 @@ const Orders = () => {
   const handleDeleteOne = (e, order) => {
     e.stopPropagation();
     if (!isManager) return;
-    if (!isDeletableStatus(order.status)) {
+    if (!isDeletableStatus(order.status, orderStatuses)) {
       notify('Нельзя удалить завершённый заказ.', 'warning');
       return;
     }
@@ -230,11 +252,7 @@ const Orders = () => {
               onChange={(value) => updateUrl({ search: urlSearch, page0Based: 0, view: 'all', status: value })}
               options={[
                 { value: '', label: 'Все' },
-                { value: 'reserved', label: 'Резерв' },
-                { value: 'confirmed', label: 'Подтвержден' },
-                { value: 'in_delivery', label: 'В доставке' },
-                { value: 'completed', label: 'Завершен' },
-                { value: 'cancelled', label: 'Отменен' },
+                ...orderStatuses.map((s) => ({ value: s.value, label: s.label })),
               ]}
             />
           </Box>
@@ -297,6 +315,12 @@ const Orders = () => {
                     Загрузка…
                   </TableCell>
                 </TableRow>
+              ) : loadError ? (
+                <TableRow>
+                  <TableCell colSpan={colCount} align="center" sx={{ py: 4, color: '#E53E3E' }}>
+                    Не удалось загрузить заказы
+                  </TableCell>
+                </TableRow>
               ) : orders.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={colCount} align="center" sx={{ py: 4, color: '#718096' }}>
@@ -306,7 +330,7 @@ const Orders = () => {
               ) : (
                 orders.map((row) => {
                   const checked = selectedIds.has(row.id);
-                  const canDelete = isManager && isDeletableStatus(row.status);
+                  const canDelete = isManager && isDeletableStatus(row.status, orderStatuses);
                   return (
                     <TableRow
                       key={row.id}
