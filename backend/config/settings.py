@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'common',
     'analytics',
     'tasks.apps.TasksConfig',
+    'personnel.apps.PersonnelConfig',
 ]
 
 MIDDLEWARE = [

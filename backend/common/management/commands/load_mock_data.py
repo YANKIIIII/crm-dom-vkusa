@@ -37,10 +37,14 @@ class Command(BaseCommand):
 
         self.stdout.write("Creating users...")
         u1 = User.objects.create_user(username='valentin', password='123', first_name='Валентин', last_name='Менеджер', role='seller')
-        UserProfile.objects.create(user=u1, phone='+375291112233')
-        
+        profile1, _ = UserProfile.objects.get_or_create(user=u1)
+        profile1.phone = '+375291112233'
+        profile1.save(update_fields=['phone'])
+
         u2 = User.objects.create_user(username='aleksey', password='123', first_name='Алексей', last_name='Смирнов', role='manager')
-        UserProfile.objects.create(user=u2, phone='+375291112244')
+        profile2, _ = UserProfile.objects.get_or_create(user=u2)
+        profile2.phone = '+375291112244'
+        profile2.save(update_fields=['phone'])
 
         self.stdout.write("Creating dictionaries...")
         cat_grill = ProductCategory.objects.create(name='Грили', code='A')

@@ -1,5 +1,9 @@
+from decimal import Decimal
+
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
 
 class User(AbstractUser):
     class Role(models.TextChoices):
@@ -22,12 +26,25 @@ class User(AbstractUser):
     class Meta:
         db_table = 'users'
 
+
 class UserProfile(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='profile', verbose_name='Пользователь'
     )
     phone = models.CharField(
         max_length=20, blank=True, verbose_name='Телефон'
+    )
+    birthday = models.DateField(null=True, blank=True, verbose_name='День рождения')
+    notes = models.TextField(blank=True, verbose_name='Заметка')
+    hourly_rate = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name='Ставка часа',
+    )
+    commission_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('3.00'),
+        validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))],
+        verbose_name='Процент с продаж',
     )
 
     class Meta:
@@ -41,4 +58,3 @@ class AuthLock(models.Model):
 
     class Meta:
         db_table = 'auth_locks'
-

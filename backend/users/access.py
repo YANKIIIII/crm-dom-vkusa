@@ -5,6 +5,7 @@ ALL_MODULES = (
     'tasks',
     'warehouse',
     'references',
+    'personnel',
     'users',
     'audit',
 )

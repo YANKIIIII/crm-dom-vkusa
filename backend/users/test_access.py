@@ -37,7 +37,8 @@ def test_me_manager_has_all_modules():
     response = _api(manager).get(ME_URL)
     assert response.status_code == 200, response.data
     assert set(response.data['modules']) >= {
-        'analytics', 'orders', 'clients', 'tasks', 'warehouse', 'references', 'users', 'audit',
+        'analytics', 'orders', 'clients', 'tasks', 'warehouse', 'references',
+        'personnel', 'users', 'audit',
     }
 
 
