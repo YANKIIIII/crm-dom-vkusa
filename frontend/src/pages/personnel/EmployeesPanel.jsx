@@ -43,6 +43,12 @@ const formatIsoRange = (from, to) => {
   return `${formatIso(from)}–${formatIso(to)}`;
 };
 
+const pluralizeDays = (n) => {
+  if (n % 10 === 1 && n % 100 !== 11) return `${n} день`;
+  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return `${n} дня`;
+  return `${n} дней`;
+};
+
 const emptyProfile = {
   phone: '',
   birthday: '',
@@ -600,7 +606,25 @@ const EmployeesPanel = ({ year, month }) => {
               {/* SECTION: Leaves */}
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
-                  <SectionTitle icon="beach_access">Отпуска / отгулы</SectionTitle>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <SectionTitle icon="beach_access">Отпуска / отгулы</SectionTitle>
+                    {(() => {
+                      const vacDays = (detail.leaves || [])
+                        .filter((l) => l.kind === 'vacation')
+                        .reduce((sum, l) => sum + (l.working_days || 0), 0);
+                      const offDays = (detail.leaves || [])
+                        .filter((l) => l.kind === 'time_off')
+                        .reduce((sum, l) => sum + (l.working_days || 0), 0);
+                      if (!vacDays && !offDays) return null;
+                      return (
+                        <Typography variant="caption" sx={{ color: '#718096', fontWeight: 600 }}>
+                          {vacDays > 0 && `отпуск: ${pluralizeDays(vacDays)}`}
+                          {vacDays > 0 && offDays > 0 && ' · '}
+                          {offDays > 0 && `отгул: ${pluralizeDays(offDays)}`}
+                        </Typography>
+                      );
+                    })()}
+                  </Box>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button
                       size="small"
@@ -667,6 +691,13 @@ const EmployeesPanel = ({ year, month }) => {
                         <Typography variant="body2" sx={{ fontWeight: 600, color: '#2D3748' }}>
                           {formatIsoRange(item.date_from, item.date_to)}
                         </Typography>
+                        {item.working_days > 0 && (
+                          <Chip
+                            size="small"
+                            label={`${item.working_days} раб. дн.`}
+                            sx={{ bgcolor: '#EDF2F7', color: '#4A5568', fontWeight: 600, fontSize: '0.65rem', height: 20 }}
+                          />
+                        )}
                         {item.comment && (
                           <Typography variant="caption" sx={{ color: '#A0AEC0', ml: 'auto' }}>{item.comment}</Typography>
                         )}

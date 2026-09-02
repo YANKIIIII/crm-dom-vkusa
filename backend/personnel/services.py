@@ -1,5 +1,5 @@
 from calendar import monthrange
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -94,3 +94,16 @@ def leaves_intersecting_month(year, month):
     first = date(year, month, 1)
     last = date(year, month, monthrange(year, month)[1])
     return Leave.objects.filter(date_from__lte=last, date_to__gte=first)
+
+
+def working_days(date_from, date_to):
+    """Count weekdays (Mon–Fri) between two dates, inclusive."""
+    if not date_from or not date_to or date_to < date_from:
+        return 0
+    count = 0
+    current = date_from
+    while current <= date_to:
+        if current.weekday() < 5:  # Mon=0 … Fri=4
+            count += 1
+        current += timedelta(days=1)
+    return count

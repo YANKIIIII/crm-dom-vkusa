@@ -34,12 +34,19 @@ class LeaveUserSerializer(serializers.ModelSerializer):
         fields = ('id', 'first_name', 'last_name', 'username', 'is_active')
 
 
+from personnel.services import working_days as calc_working_days
+
+
 class LeaveReadSerializer(serializers.ModelSerializer):
     user = LeaveUserSerializer(read_only=True)
+    working_days = serializers.SerializerMethodField()
 
     class Meta:
         model = Leave
-        fields = ('id', 'user', 'kind', 'date_from', 'date_to', 'comment')
+        fields = ('id', 'user', 'kind', 'date_from', 'date_to', 'comment', 'working_days')
+
+    def get_working_days(self, obj):
+        return calc_working_days(obj.date_from, obj.date_to)
 
 
 class LeaveWriteSerializer(serializers.ModelSerializer):
