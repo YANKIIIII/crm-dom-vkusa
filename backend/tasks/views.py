@@ -39,5 +39,4 @@ class BoardViewSet(viewsets.ReadOnlyModelViewSet):
         if not user_can_access_board(self.request.user, obj):
             raise PermissionDenied
         ensure_board(obj.owner)
-        obj.refresh_from_db()
-        return obj
+        return self.get_queryset().get(pk=obj.pk)

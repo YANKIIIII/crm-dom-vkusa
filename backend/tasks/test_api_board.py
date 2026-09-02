@@ -28,9 +28,8 @@ def test_seller_lists_only_own_board():
     other = _seller(username='ts_oth', email='ts_oth@test.com')
     response = _api(seller).get(BOARDS_URL)
     assert response.status_code == 200, response.data
-    payload = response.data
-    rows = payload if isinstance(payload, list) else payload.get('results', payload)
-    ids = [row['owner']['id'] for row in rows]
+    assert isinstance(response.data, list)
+    ids = [row['owner']['id'] for row in response.data]
     assert ids == [seller.pk]
     assert other.pk not in ids
 
@@ -60,8 +59,8 @@ def test_manager_lists_active_boards_and_retrieves_nested():
     inactive = _seller(username='ts_off', email='ts_off@test.com', is_active=False)
     listed = _api(manager).get(BOARDS_URL)
     assert listed.status_code == 200, listed.data
-    rows = listed.data if isinstance(listed.data, list) else listed.data.get('results', [])
-    owner_ids = {row['owner']['id'] for row in rows}
+    assert isinstance(listed.data, list)
+    owner_ids = {row['owner']['id'] for row in listed.data}
     assert seller.pk in owner_ids
     assert manager.pk in owner_ids
     assert inactive.pk not in owner_ids
