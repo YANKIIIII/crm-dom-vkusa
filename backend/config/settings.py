@@ -4,8 +4,11 @@ Django settings for config project.
 
 from pathlib import Path
 from datetime import timedelta
-import environ
+import os
 import re
+import sys
+
+import environ
 import django.utils.cache
 
 # Compatibility shim: Django 6.1 removed cc_delim_re from django.utils.cache,
@@ -15,6 +18,14 @@ if not hasattr(django.utils.cache, 'cc_delim_re'):
     django.utils.cache.cc_delim_re = re.compile(r'\s*,\s*')
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# pytest-django configures Django before conftest.py runs, so test env
+# must be in place before SECRET_KEY = env(...) below.
+if 'pytest' in sys.modules:
+    os.environ.setdefault('SECRET_KEY', 'test-only-insecure-key-not-for-production')
+    os.environ.setdefault('DEBUG', 'True')
+    os.environ.setdefault('ALLOWED_HOSTS', 'localhost,testserver')
+    os.environ['USE_SQLITE'] = 'True'
 
 env = environ.Env(
     DEBUG=(bool, False),
@@ -85,8 +96,6 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database: Postgres by default. SQLite when USE_SQLITE=True (pytest via conftest /
 # makemigrations without Docker). No silent fallback when POSTGRES_HOST is unset.
-import sys
-
 _use_sqlite = env('USE_SQLITE') or ('pytest' in sys.modules)
 if _use_sqlite:
     DATABASES = {

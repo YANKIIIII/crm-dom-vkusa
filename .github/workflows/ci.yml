@@ -8,6 +8,11 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-only-insecure-key
+      USE_SQLITE: 'True'
+      DEBUG: 'True'
+      ALLOWED_HOSTS: localhost,testserver
     defaults:
       run:
         working-directory: backend
