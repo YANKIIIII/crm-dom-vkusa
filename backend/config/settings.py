@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'clients',
     'common',
     'analytics',
+    'tasks.apps.TasksConfig',
 ]
 
 MIDDLEWARE = [
