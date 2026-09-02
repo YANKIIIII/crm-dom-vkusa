@@ -2,7 +2,7 @@ import {
   Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
   DialogTitle, Paper, TextField, Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
@@ -57,6 +57,7 @@ const Tasks = () => {
 
   const [orderOptions, setOrderOptions] = useState([]);
   const [clientOptions, setClientOptions] = useState([]);
+  const loadRequestId = useRef(0);
 
   const loadBoards = useCallback(() => {
     return api.get('/tasks/boards/').then((res) => {
@@ -68,17 +69,23 @@ const Tasks = () => {
 
   const loadBoard = useCallback((id) => {
     if (!id) return Promise.resolve();
+    const requestId = ++loadRequestId.current;
     setLoading(true);
     return api.get(`/tasks/boards/${id}/`)
       .then((res) => {
+        if (requestId !== loadRequestId.current) return;
         setBoard(res.data);
         setLoadError(null);
       })
       .catch((err) => {
+        if (requestId !== loadRequestId.current) return;
         setLoadError(extractApiError(err));
         notify(`Не удалось загрузить доску:\n${extractApiError(err)}`, 'error');
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (requestId !== loadRequestId.current) return;
+        setLoading(false);
+      });
   }, [notify]);
 
   useEffect(() => {
@@ -210,6 +217,7 @@ const Tasks = () => {
 
   const onSelectBoard = (nextId) => {
     setBoardId(nextId);
+    setBoard(null);
     loadBoard(nextId);
   };
 
