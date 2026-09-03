@@ -35,6 +35,43 @@ const ENTITY_LABELS = {
 const ACTION_OPTIONS = Object.keys(ACTION_LABELS);
 const ENTITY_OPTIONS = Object.keys(ENTITY_LABELS);
 
+const DETAIL_KEYS = {
+  status: 'Статус',
+  username: 'Логин',
+  ip_address: 'IP-адрес',
+  event: 'Событие',
+  stock_quantity: 'Кол-во на складе',
+  receipt: 'Приход',
+  old_status: 'Старый статус',
+  new_status: 'Новый статус',
+  items_deleted: 'Удалено товаров',
+  payments_deleted: 'Удалено оплат',
+  deliveries_deleted: 'Удалено доставок',
+};
+
+const DETAIL_VALUES = {
+  success: 'Успешно',
+  failure: 'Ошибка',
+  password_change: 'Смена пароля',
+};
+
+const formatDetails = (details) => {
+  if (!details || Object.keys(details).length === 0) return '—';
+  
+  if (typeof details === 'object') {
+    return Object.entries(details)
+      .map(([key, value]) => {
+        const label = DETAIL_KEYS[key] || key;
+        const val = DETAIL_VALUES[value] || value;
+        const strVal = typeof val === 'object' ? JSON.stringify(val) : val;
+        return `${label}: ${strVal}`;
+      })
+      .join(', ');
+  }
+  
+  return String(details);
+};
+
 const AuditLog = () => {
   const { notify } = useFeedback();
   const [logs, setLogs] = useState([]);
@@ -163,7 +200,7 @@ const AuditLog = () => {
                   <TableCell sx={{ color: '#4A5568' }}>{ENTITY_LABELS[row.entity_type] || row.entity_type}</TableCell>
                   <TableCell sx={{ color: '#4A5568' }}>{row.entity_id}</TableCell>
                   <TableCell sx={{ color: '#4A5568', maxWidth: 360 }}>
-                    <TruncatedText>{row.details ? JSON.stringify(row.details) : '—'}</TruncatedText>
+                    <TruncatedText>{formatDetails(row.details)}</TruncatedText>
                   </TableCell>
                 </TableRow>
               ))}
