@@ -31,15 +31,24 @@ const ProductPreviewTooltip = ({ product, children }) => {
   ].filter(Boolean);
 
   const title = (
-    <Box sx={{ px: 0.25, py: 0.25, minWidth: 160, maxWidth: 260 }}>
-      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: rows.length ? 0.75 : 0, lineHeight: 1.3 }}>
+    <Box sx={{ px: 0.25, py: 0.25, minWidth: 160, maxWidth: 300 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
         {info.name || 'Товар'}
       </Typography>
-      {rows.map(([label, value]) => (
-        <Typography key={label} variant="caption" display="block" sx={{ opacity: 0.92, lineHeight: 1.45 }}>
-          {label}: {value}
-        </Typography>
-      ))}
+      {rows.length > 0 && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', columnGap: 1.5, rowGap: 0.25, mt: 1 }}>
+          {rows.map(([label, value]) => (
+            <Box display="contents" key={label}>
+              <Typography variant="caption" sx={{ opacity: 0.7, lineHeight: 1.45 }}>
+                {label}
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 500, lineHeight: 1.45 }}>
+                {value}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 
