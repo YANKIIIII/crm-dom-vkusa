@@ -57,6 +57,7 @@ const OrderDetail = () => {
   const [draftPhone, setDraftPhone] = useState(null);
   const [phoneSaving, setPhoneSaving] = useState(false);
   const [draftDeliveries, setDraftDeliveries] = useState([]);
+  const [dirtyDeliveryIds, setDirtyDeliveryIds] = useState(new Set());
   const [mutatingDeliveries, setMutatingDeliveries] = useState(false);
 
   const [paymentType, setPaymentType] = useState('');
@@ -80,8 +81,11 @@ const OrderDetail = () => {
       return Boolean(order.order_date || order.sales_channel || order.client || order.seller || order.comment);
     }
     if (!baseline) return false;
+    if (draftPayments.length > 0) return true;
+    if (draftDeliveries.length > 0) return true;
+    if (dirtyDeliveryIds.size > 0) return true;
     return Object.keys(diffWritable(order, baseline, isManager)).length > 0;
-  }, [order, baseline, isNew, isManager]);
+  }, [order, baseline, isNew, isManager, draftPayments, draftDeliveries, dirtyDeliveryIds]);
 
   useEffect(() => {
     if (!isDirty) return undefined;
@@ -241,30 +245,6 @@ const OrderDetail = () => {
     if (nextKind === 'cancelled' || nextStatus === 'cancelled') {
       if (!(await confirm('Отменить заказ?'))) return;
     }
-
-    if (isNew) {
-      handleChange('status', nextStatus);
-      return;
-    }
-
-    // Prefer status-only PATCH when nothing else is dirty besides status
-    const otherDiff = diffWritable({ ...order, status: baseline?.status }, baseline, isManager);
-    delete otherDiff.status;
-    const onlyStatus = Object.keys(otherDiff).length === 0;
-
-    if (onlyStatus) {
-      setSaving(true);
-      try {
-        await api.patch(`/orders/orders/${id}/`, { status: nextStatus });
-        await refreshOrder();
-      } catch (err) {
-        notify(`Ошибка смены статуса:\n${extractApiError(err)}`, 'error');
-      } finally {
-        setSaving(false);
-      }
-      return;
-    }
-
     handleChange('status', nextStatus);
   };
 
@@ -308,16 +288,14 @@ const OrderDetail = () => {
         const toSend = isTerminal
           ? (payload.comment !== undefined ? { comment: payload.comment } : {})
           : payload;
-        if (Object.keys(toSend).length === 0) {
+        const hasDrafts = draftPayments.length > 0 || draftDeliveries.length > 0 || dirtyDeliveryIds.size > 0;
+        if (Object.keys(toSend).length === 0 && !hasDrafts) {
           notify('Нет изменений для сохранения', 'warning');
           return;
         }
-        if (Object.keys(toSend).length === 1 && toSend.status !== undefined) {
-          await api.patch(`/orders/orders/${id}/`, { status: toSend.status });
-        } else {
+        if (Object.keys(toSend).length > 0) {
           await api.patch(`/orders/orders/${id}/`, toSend);
         }
-        notify('Заказ сохранен', 'success');
         // Persist draft payments
         for (const dp of draftPayments) {
           await api.post('/orders/order_payments/', {
@@ -326,7 +304,30 @@ const OrderDetail = () => {
             amount: dp.amount,
           });
         }
+        // Persist new draft deliveries
+        for (const row of draftDeliveries) {
+          if (!row.delivery_service) continue;
+          await api.post('/orders/order_deliveries/', {
+            order: id,
+            delivery_service: row.delivery_service,
+            tracking_number: row.tracking_number || '',
+            delivery_date: row.delivery_date || null,
+          });
+        }
+        // Persist edited existing deliveries
+        const currentDeliveries = order.deliveries || [];
+        for (const dlv of currentDeliveries) {
+          if (!dirtyDeliveryIds.has(dlv.id)) continue;
+          await api.patch(`/orders/order_deliveries/${dlv.id}/`, {
+            delivery_service: dlv.delivery_service,
+            tracking_number: dlv.tracking_number || '',
+            delivery_date: dlv.delivery_date || null,
+          });
+        }
         setDraftPayments([]);
+        setDraftDeliveries([]);
+        setDirtyDeliveryIds(new Set());
+        notify('Заказ сохранен', 'success');
         await refreshOrder();
       }
     } catch (err) {
@@ -419,24 +420,6 @@ const OrderDetail = () => {
     ]);
   };
 
-  const persistDraftDelivery = async (row) => {
-    if (isNew || !row.delivery_service) return;
-    setMutatingDeliveries(true);
-    try {
-      await api.post('/orders/order_deliveries/', {
-        order: id,
-        delivery_service: row.delivery_service,
-        tracking_number: row.tracking_number || '',
-        delivery_date: row.delivery_date || null,
-      });
-      setDraftDeliveries((prev) => prev.filter((item) => item.tempId !== row.tempId));
-      await refreshOrder();
-    } catch (err) {
-      notify(`Не удалось сохранить доставку:\n${extractApiError(err)}`, 'error');
-    } finally {
-      setMutatingDeliveries(false);
-    }
-  };
 
   const updateDraftDelivery = (tempId, field, value) => {
     setDraftDeliveries((prev) => prev.map((row) => (
@@ -444,61 +427,54 @@ const OrderDetail = () => {
     )));
   };
 
-  const handleDeliveryServiceChange = async (row, value) => {
-    if (row.tempId) {
-      updateDraftDelivery(row.tempId, 'delivery_service', value);
-      if (value && !isNew) {
-        await persistDraftDelivery({ ...row, delivery_service: value });
-      }
-      return;
-    }
-    setMutatingDeliveries(true);
-    try {
-      await api.patch(`/orders/order_deliveries/${row.id}/`, { delivery_service: value });
-      await refreshOrder();
-    } catch (err) {
-      notify(`Не удалось сохранить доставку:\n${extractApiError(err)}`, 'error');
-    } finally {
-      setMutatingDeliveries(false);
-    }
+  const markDeliveryDirty = (deliveryId) => {
+    if (deliveryId) setDirtyDeliveryIds((prev) => new Set(prev).add(deliveryId));
   };
 
-  const handleDeliveryTrackingBlur = async (row, value) => {
+  const handleDeliveryServiceChange = (row, value) => {
+    if (row.tempId) {
+      updateDraftDelivery(row.tempId, 'delivery_service', value);
+      return;
+    }
+    setOrder((prev) => ({
+      ...prev,
+      deliveries: (prev.deliveries || []).map((d) =>
+        d.id === row.id ? { ...d, delivery_service: value } : d
+      ),
+    }));
+    markDeliveryDirty(row.id);
+  };
+
+  const handleDeliveryTrackingBlur = (row, value) => {
     const tracking = value.trim();
     if (row.tempId) {
       updateDraftDelivery(row.tempId, 'tracking_number', tracking);
       return;
     }
     if (tracking === (row.tracking_number || '')) return;
-    setMutatingDeliveries(true);
-    try {
-      await api.patch(`/orders/order_deliveries/${row.id}/`, { tracking_number: tracking });
-      await refreshOrder();
-    } catch (err) {
-      notify(`Не удалось сохранить трек-номер:\n${extractApiError(err)}`, 'error');
-      await refreshOrder();
-    } finally {
-      setMutatingDeliveries(false);
-    }
+    setOrder((prev) => ({
+      ...prev,
+      deliveries: (prev.deliveries || []).map((d) =>
+        d.id === row.id ? { ...d, tracking_number: tracking } : d
+      ),
+    }));
+    markDeliveryDirty(row.id);
   };
 
-  const handleDeliveryDateBlur = async (row, value) => {
+  const handleDeliveryDateBlur = (row, value) => {
     const deliveryDate = value || null;
     if (row.tempId) {
       updateDraftDelivery(row.tempId, 'delivery_date', deliveryDate || '');
       return;
     }
     if ((row.delivery_date || null) === deliveryDate) return;
-    setMutatingDeliveries(true);
-    try {
-      await api.patch(`/orders/order_deliveries/${row.id}/`, { delivery_date: deliveryDate });
-      await refreshOrder();
-    } catch (err) {
-      notify(`Не удалось сохранить дату доставки:\n${extractApiError(err)}`, 'error');
-      await refreshOrder();
-    } finally {
-      setMutatingDeliveries(false);
-    }
+    setOrder((prev) => ({
+      ...prev,
+      deliveries: (prev.deliveries || []).map((d) =>
+        d.id === row.id ? { ...d, delivery_date: deliveryDate } : d
+      ),
+    }));
+    markDeliveryDirty(row.id);
   };
 
   const handleDeleteDelivery = async (row) => {
