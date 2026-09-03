@@ -734,7 +734,9 @@ const OrderDetail = () => {
   const deliveryRows = [...(order.deliveries || []), ...draftDeliveries];
   const allPayments = [...payments, ...draftPayments];
   const paidTotal = allPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
-  const orderTotal = parseFloat(order.total || 0);
+  const subtotal = (order.items || []).reduce((sum, item) => sum + parseFloat(item.line_total || 0), 0);
+  const discountPct = parseFloat(order.discount_percent || 0);
+  const orderTotal = subtotal * (1 - discountPct / 100);
   const remaining = Math.max(0, orderTotal - paidTotal);
 
   const clientDisplayName =
