@@ -41,7 +41,7 @@ class Supplier(models.Model):
 
 class ProductCard(models.Model):
     name = models.CharField(max_length=255, verbose_name='Наименование')
-    sku = models.CharField(max_length=50, unique=True, verbose_name='Артикул')
+    sku = models.CharField(max_length=50, verbose_name='Артикул')
     category = models.ForeignKey(
         ProductCategory, on_delete=models.RESTRICT, related_name='products', verbose_name='Категория'
     )
