@@ -1,5 +1,5 @@
 import {
-  Box, Button, Checkbox, Grid, InputAdornment, Table, TableBody, TableCell,
+  Box, Button, Checkbox, Grid, IconButton, InputAdornment, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import ProductPreviewTooltip from '../../components/ProductPreviewTooltip';
@@ -25,6 +25,7 @@ const OrderItemsTab = ({
   onQtyChange,
   onDeleteItem,
   onAddPayment,
+  onDeletePayment,
   onPaymentTypeChange,
   onPaymentAmountChange,
 }) => (
@@ -192,13 +193,32 @@ const OrderItemsTab = ({
               <TableRow>
                 <TableCell>Способ оплаты</TableCell>
                 <TableCell align="right">Сумма</TableCell>
+                <TableCell align="right">Действия</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {payments.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>{paymentTypeName(p.payment_type)}</TableCell>
+                <TableRow key={p.id || p.tempId} sx={p.tempId ? { fontStyle: 'italic', bgcolor: '#FFFBF0' } : undefined}>
+                  <TableCell>
+                    {paymentTypeName(p.payment_type)}
+                    {p.tempId && (
+                      <Typography component="span" variant="caption" sx={{ ml: 1, color: '#B7791F' }}>
+                        (не сохранено)
+                      </Typography>
+                    )}
+                  </TableCell>
                   <TableCell align="right">{formatCurrency(p.amount)}</TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      disabled={isTerminal || paymentSaving}
+                      onClick={() => onDeletePayment(p)}
+                      title="Удалить оплату"
+                    >
+                      <span className="material-icons" style={{ fontSize: 18 }}>delete</span>
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

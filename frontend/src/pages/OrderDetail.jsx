@@ -62,6 +62,7 @@ const OrderDetail = () => {
   const [paymentType, setPaymentType] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentSaving, setPaymentSaving] = useState(false);
+  const [draftPayments, setDraftPayments] = useState([]);
 
   const isTerminal = isTerminalOrderStatus(order?.status, orderStatuses);
   const isNew = id === 'new';
@@ -317,6 +318,15 @@ const OrderDetail = () => {
           await api.patch(`/orders/orders/${id}/`, toSend);
         }
         notify('Заказ сохранен', 'success');
+        // Persist draft payments
+        for (const dp of draftPayments) {
+          await api.post('/orders/order_payments/', {
+            order: id,
+            payment_type: dp.payment_type,
+            amount: dp.amount,
+          });
+        }
+        setDraftPayments([]);
         await refreshOrder();
       }
     } catch (err) {
@@ -649,7 +659,7 @@ const OrderDetail = () => {
     }
   };
 
-  const handleAddPayment = async () => {
+  const handleAddPayment = () => {
     if (isNew) {
       notify('Сначала сохраните заказ', 'warning');
       return;
@@ -667,18 +677,27 @@ const OrderDetail = () => {
       notify('Укажите сумму оплаты', 'warning');
       return;
     }
+    setDraftPayments((prev) => [
+      ...prev,
+      { tempId: `draft-${Date.now()}`, payment_type: paymentType, amount },
+    ]);
+    setPaymentType('');
+    setPaymentAmount('');
+  };
+
+  const handleDeletePayment = async (payment) => {
+    if (isTerminal) return;
+    if (!(await confirm('Удалить оплату?'))) return;
+    if (payment.tempId) {
+      setDraftPayments((prev) => prev.filter((p) => p.tempId !== payment.tempId));
+      return;
+    }
     setPaymentSaving(true);
     try {
-      await api.post('/orders/order_payments/', {
-        order: id,
-        payment_type: paymentType,
-        amount,
-      });
-      setPaymentType('');
-      setPaymentAmount('');
+      await api.delete(`/orders/order_payments/${payment.id}/`);
       await refreshOrder();
     } catch (err) {
-      notify(`Ошибка добавления оплаты:\n${extractApiError(err)}`, 'error');
+      notify(`Ошибка удаления оплаты:\n${extractApiError(err)}`, 'error');
     } finally {
       setPaymentSaving(false);
     }
@@ -737,7 +756,8 @@ const OrderDetail = () => {
 
   const payments = order.payments || [];
   const deliveryRows = [...(order.deliveries || []), ...draftDeliveries];
-  const paidTotal = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
+  const allPayments = [...payments, ...draftPayments];
+  const paidTotal = allPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
   const orderTotal = parseFloat(order.total || 0);
   const remaining = Math.max(0, orderTotal - paidTotal);
 
@@ -858,7 +878,7 @@ const OrderDetail = () => {
             paymentType={paymentType}
             paymentTypes={paymentTypes}
             paymentAmount={paymentAmount}
-            payments={payments}
+            payments={allPayments}
             paymentTypeName={paymentTypeName}
             orderTotal={orderTotal}
             paidTotal={paidTotal}
@@ -867,6 +887,7 @@ const OrderDetail = () => {
             onQtyChange={handleQtyChange}
             onDeleteItem={handleDeleteItem}
             onAddPayment={handleAddPayment}
+            onDeletePayment={handleDeletePayment}
             onPaymentTypeChange={setPaymentType}
             onPaymentAmountChange={setPaymentAmount}
           />
