@@ -47,29 +47,47 @@ const DETAIL_KEYS = {
   items_deleted: 'Удалено товаров',
   payments_deleted: 'Удалено оплат',
   deliveries_deleted: 'Удалено доставок',
+  order_id: 'ID заказа',
+  quantity: 'Количество',
+  new: 'Новое значение',
+  old: 'Старое значение',
 };
 
 const DETAIL_VALUES = {
   success: 'Успешно',
   failure: 'Ошибка',
   password_change: 'Смена пароля',
+  stock_deducted: 'Списание со склада',
+  stock_restored: 'Возврат на склад',
+  stock_receipt: 'Приход на склад',
+  reserved: 'Резерв',
+  confirmed: 'Подтвержден',
+  in_delivery: 'В доставке',
+  completed: 'Завершен',
+  cancelled: 'Отменен',
 };
 
 const formatDetails = (details) => {
-  if (!details || Object.keys(details).length === 0) return '—';
+  if (!details || (typeof details === 'object' && Object.keys(details).length === 0)) return '—';
   
   if (typeof details === 'object') {
     return Object.entries(details)
       .map(([key, value]) => {
         const label = DETAIL_KEYS[key] || key;
-        const val = DETAIL_VALUES[value] || value;
-        const strVal = typeof val === 'object' ? JSON.stringify(val) : val;
-        return `${label}: ${strVal}`;
+        
+        let formattedValue;
+        if (typeof value === 'object' && value !== null) {
+          formattedValue = `{ ${formatDetails(value)} }`;
+        } else {
+          formattedValue = DETAIL_VALUES[value] || value;
+        }
+        
+        return `${label}: ${formattedValue}`;
       })
       .join(', ');
   }
   
-  return String(details);
+  return DETAIL_VALUES[details] || String(details);
 };
 
 const AuditLog = () => {
