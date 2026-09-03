@@ -1,4 +1,4 @@
-import { Box, Button, Grid, TextField, Typography } from '@mui/material';
+import { Box, Button, Grid, IconButton, TextField, Tooltip, Typography } from '@mui/material';
 import SearchableSelect from '../../components/SearchableSelect';
 import { formatUserName } from './utils';
 
@@ -27,6 +27,7 @@ const OrderDataTab = ({
   onDeleteDelivery,
   onAddPhone,
   onOpenClientPicker,
+  onRemoveClient,
   onPersistPhone,
   onDraftPhoneChange,
 }) => (
@@ -221,13 +222,29 @@ const OrderDataTab = ({
       </Box>
       <Grid container spacing={3} alignItems="flex-start">
         <Grid size={4}>
-          <TextField
-            fullWidth
-            size="small"
-            label="ФИО"
-            disabled
-            value={clientDisplayName}
-          />
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'flex-start' }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="ФИО"
+              disabled
+              value={clientDisplayName}
+            />
+            {order.client && !isTerminal && (
+              <>
+                <Tooltip title="Сменить клиента">
+                  <IconButton size="small" onClick={onOpenClientPicker} sx={{ mt: 0.5 }}>
+                    <span className="material-icons" style={{ fontSize: 20 }}>swap_horiz</span>
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Убрать клиента">
+                  <IconButton size="small" color="error" onClick={onRemoveClient} sx={{ mt: 0.5 }}>
+                    <span className="material-icons" style={{ fontSize: 20 }}>close</span>
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
+          </Box>
         </Grid>
         <Grid size={4}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>

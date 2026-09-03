@@ -372,6 +372,14 @@ const OrderDetail = () => {
     setOpenClientModal(false);
   };
 
+  const handleRemoveClient = () => {
+    if (isTerminal) return;
+    handleChange('client', null);
+    setSelectedClientName('');
+    setClientPhones([]);
+    setDraftPhone(null);
+  };
+
   const persistPhoneNumber = async (phoneId, number) => {
     if (!order?.client || isTerminal) return;
     const trimmed = number.trim();
@@ -840,6 +848,7 @@ const OrderDetail = () => {
             onDeleteDelivery={handleDeleteDelivery}
             onAddPhone={handleAddPhone}
             onOpenClientPicker={openClientPicker}
+            onRemoveClient={handleRemoveClient}
             onPersistPhone={persistPhoneNumber}
             onDraftPhoneChange={setDraftPhone}
           />
