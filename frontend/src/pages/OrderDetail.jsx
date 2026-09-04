@@ -613,6 +613,13 @@ const OrderDetail = () => {
     }
   };
 
+  const skipGrillClient = async () => {
+    setOpenGrillClientModal(false);
+    const products = pendingGrillProducts;
+    setPendingGrillProducts([]);
+    await addProductsToOrder(products);
+  };
+
   const handleQtyChange = async (item, rawQty) => {
     if (isTerminal) return;
     const quantity = parseInt(rawQty, 10);
@@ -903,6 +910,7 @@ const OrderDetail = () => {
         onChange={setGrillForm}
         onClose={closeGrillClientModal}
         onSubmit={submitGrillClient}
+        onSkip={skipGrillClient}
       />
     </Box>
   );

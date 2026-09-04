@@ -9,6 +9,7 @@ const GrillClientDialog = ({
   onChange,
   onClose,
   onSubmit,
+  onSkip,
 }) => (
   <Dialog
     open={open}
@@ -48,11 +49,14 @@ const GrillClientDialog = ({
       />
     </DialogContent>
     <DialogActions>
+      <Button onClick={onSkip} disabled={saving} color="inherit" sx={{ mr: 'auto' }}>
+        Без клиента
+      </Button>
       <Button onClick={onClose} disabled={saving}>
         Отмена
       </Button>
       <Button variant="contained" disabled={saving} onClick={onSubmit}>
-        {saving ? <CircularProgress size={20} color="inherit" /> : 'Сохранить и добавить'}
+        {saving ? <CircularProgress size={20} color="inherit" /> : 'Сохранить'}
       </Button>
     </DialogActions>
   </Dialog>
