@@ -82,13 +82,8 @@ class ClientService:
         grill_item = ClientService._grill_item(order)
         has_grill = grill_item is not None
 
-        if not client_data and not has_grill:
+        if not client_data:
             return None
-
-        if has_grill and not client_data:
-            raise ValidationError(
-                'При продаже гриля укажите клиента (имя и телефон).'
-            )
 
         client_data = client_data or {}
         first_name = client_data.get('first_name') or f"Новый Клиент (Заказ #{order.order_number})"

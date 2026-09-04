@@ -9,11 +9,10 @@ import ProductSearchModal from '../components/ProductSearchModal';
 import ClientPickerDialog from '../components/ClientPickerDialog';
 import { useFeedback } from '../hooks/useFeedback';
 import {
-  emptyNewOrder, pickWritable, diffWritable, clientIdOf, isGrillProduct,
+  emptyNewOrder, pickWritable, diffWritable, clientIdOf,
 } from './orderDetail/utils';
 import OrderDataTab from './orderDetail/OrderDataTab';
 import OrderItemsTab from './orderDetail/OrderItemsTab';
-import GrillClientDialog from './orderDetail/GrillClientDialog';
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -47,10 +46,7 @@ const OrderDetail = () => {
 
   const [openProductDialog, setOpenProductDialog] = useState(false);
   const [openClientModal, setOpenClientModal] = useState(false);
-  const [openGrillClientModal, setOpenGrillClientModal] = useState(false);
-  const [pendingGrillProducts, setPendingGrillProducts] = useState([]);
-  const [grillForm, setGrillForm] = useState({ first_name: '', last_name: '', phone: '' });
-  const [grillSaving, setGrillSaving] = useState(false);
+
 
   const [selectedClientName, setSelectedClientName] = useState('');
   const [clientPhones, setClientPhones] = useState([]);
@@ -554,71 +550,10 @@ const OrderDetail = () => {
       notify(`Не удалось сохранить клиента:\n${extractApiError(err)}`, 'error');
       return;
     }
-    const hasGrill = selectedProducts.some(isGrillProduct);
-    if (hasGrill && !clientId) {
-      setPendingGrillProducts(selectedProducts);
-      setGrillForm({ first_name: '', last_name: '', phone: '' });
-      setOpenGrillClientModal(true);
-      return;
-    }
     await addProductsToOrder(selectedProducts);
   };
 
-  const submitGrillClient = async () => {
-    if (clientIdOf(order)) {
-      const products = pendingGrillProducts;
-      setOpenGrillClientModal(false);
-      setPendingGrillProducts([]);
-      await addProductsToOrder(products);
-      return;
-    }
-    const firstName = grillForm.first_name.trim();
-    const lastName = grillForm.last_name.trim();
-    const phone = grillForm.phone.trim();
-    if (!firstName || !phone) {
-      notify('Укажите имя и телефон клиента', 'warning');
-      return;
-    }
-    setGrillSaving(true);
-    try {
-      let client = null;
-      const searchRes = await api.get('/clients/clients/', { params: { search: phone } });
-      const found = (searchRes.data.results || searchRes.data || []).find(
-        (c) => c.primary_phone === phone || (c.phones || []).some((p) => p.number === phone)
-      );
-      if (found) {
-        client = found;
-      } else {
-        const created = await api.post('/clients/clients/', {
-          first_name: firstName,
-          last_name: lastName,
-          phone,
-        });
-        client = created.data;
-      }
-      await api.patch(`/orders/orders/${id}/`, { client: client.id });
-      handleChange('client', client.id);
-      setSelectedClientName(`${client.first_name || ''} ${client.last_name || ''}`.trim());
-      if (client.discount_percent != null) {
-        handleChange('discount_percent', client.discount_percent);
-      }
-      setOpenGrillClientModal(false);
-      const products = pendingGrillProducts;
-      setPendingGrillProducts([]);
-      await addProductsToOrder(products);
-    } catch (err) {
-      notify(`Не удалось сохранить клиента:\n${extractApiError(err)}`, 'error');
-    } finally {
-      setGrillSaving(false);
-    }
-  };
 
-  const skipGrillClient = async () => {
-    setOpenGrillClientModal(false);
-    const products = pendingGrillProducts;
-    setPendingGrillProducts([]);
-    await addProductsToOrder(products);
-  };
 
   const handleQtyChange = async (item, rawQty) => {
     if (isTerminal) return;
@@ -718,11 +653,7 @@ const OrderDetail = () => {
     }
   };
 
-  const closeGrillClientModal = () => {
-    if (grillSaving) return;
-    setOpenGrillClientModal(false);
-    setPendingGrillProducts([]);
-  };
+
 
   if (loadError) {
     return (
@@ -903,15 +834,6 @@ const OrderDetail = () => {
         onSelect={selectClient}
       />
 
-      <GrillClientDialog
-        open={openGrillClientModal}
-        form={grillForm}
-        saving={grillSaving}
-        onChange={setGrillForm}
-        onClose={closeGrillClientModal}
-        onSubmit={submitGrillClient}
-        onSkip={skipGrillClient}
-      />
     </Box>
   );
 };
